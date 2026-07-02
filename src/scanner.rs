@@ -8,6 +8,7 @@ type Result<T> = std::result::Result<T, ScanError>;
 pub enum ScanError {
     UnexpectedChar { line: usize, c: char },
     UnterminatedStr { line: usize },
+    InvalidNumber { line: usize },
 }
 
 impl std::error::Error for ScanError {}
@@ -16,10 +17,13 @@ impl fmt::Display for ScanError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::UnexpectedChar { line, c } => {
-                write!(f, "line: {} | Unexpected character: {}", line, c)
+                write!(f, "line: {} | Unknown character: {}", line, c)
             }
             Self::UnterminatedStr { line } => {
-                write!(f, "line: {} | Unterminated string", line)
+                write!(f, "line: {} | Non-terminating string", line)
+            }
+            Self::InvalidNumber { line } => {
+                write!(f, "line: {} | InvalidNumber", line)
             }
         }
     }
@@ -80,12 +84,46 @@ impl<'a> Scanner<'a> {
             '/' => self.scan_slash(),
             '"' => self.scan_string()?,
             '0'..='9' => self.scan_number()?,
-
+            'a'..='z' | 'A'..='Z' | '_' => self.scan_identifier()?,
             '\n' => self.line += 1,
-
             ' ' | '\t' | '\r' => {}
             _ => return Err(ScanError::UnexpectedChar { line: self.line, c }),
         }
+
+        Ok(())
+    }
+
+    fn scan_identifier(&mut self) -> Result<()> {
+        while let Some(c) = self.peek() {
+            if c.is_alphanumeric() {
+                self.advance();
+            } else {
+                break;
+            }
+        }
+
+        let token = &self.source[self.start..self.current];
+
+        let token_type = match token {
+            "var" => TokenType::Var,
+            "if" => TokenType::If,
+            "else" => TokenType::Else,
+            "while" => TokenType::While,
+            "for" => TokenType::For,
+            "return" => TokenType::Return,
+            "and" => TokenType::And,
+            "or" => TokenType::Or,
+            "true" => TokenType::True,
+            "false" => TokenType::False,
+            "nil" => TokenType::Nil,
+            "print" => TokenType::Print,
+            "class" => TokenType::Class,
+            "this" => TokenType::This,
+            "super" => TokenType::Super,
+            _ => TokenType::Identifier,
+        };
+
+        self.add_token(token_type);
 
         Ok(())
     }

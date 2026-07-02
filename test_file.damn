@@ -1,0 +1,8 @@
+var apple = "apple";
+var num = 10;
+
+print apple;
+print num;
+
+print "dumbo";
+print 3.141;
