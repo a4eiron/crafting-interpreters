@@ -1,3 +1,9 @@
+/*
+ * multiline comments 
+ */
+
+// single line comment
+
 var apple = "apple";
 var num = 10;
 
@@ -6,3 +12,7 @@ print num;
 
 print "dumbo";
 print 3.141;
+
+/*
+ * multiline comments 
+ */

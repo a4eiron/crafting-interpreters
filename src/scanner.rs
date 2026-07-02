@@ -8,6 +8,7 @@ type Result<T> = std::result::Result<T, ScanError>;
 pub enum ScanError {
     UnexpectedChar { line: usize, c: char },
     UnterminatedStr { line: usize },
+    UnterminatedComment { line: usize },
     InvalidNumber { line: usize },
 }
 
@@ -21,6 +22,9 @@ impl fmt::Display for ScanError {
             }
             Self::UnterminatedStr { line } => {
                 write!(f, "line: {} | Non-terminating string", line)
+            }
+            Self::UnterminatedComment { line } => {
+                write!(f, "line: {} | Unterminated Comment", line)
             }
             Self::InvalidNumber { line } => {
                 write!(f, "line: {} | InvalidNumber", line)
@@ -81,7 +85,7 @@ impl<'a> Scanner<'a> {
             '=' => self.add_token_if_match('=', TokenType::EqualEqual, TokenType::Equal),
             '<' => self.add_token_if_match('=', TokenType::LesserEqual, TokenType::Lesser),
             '>' => self.add_token_if_match('=', TokenType::GreaterEqual, TokenType::Greater),
-            '/' => self.scan_slash(),
+            '/' => self.scan_slash()?,
             '"' => self.scan_string()?,
             '0'..='9' => self.scan_number()?,
             'a'..='z' | 'A'..='Z' | '_' => self.scan_identifier()?,
@@ -174,17 +178,33 @@ impl<'a> Scanner<'a> {
         Ok(())
     }
 
-    fn scan_slash(&mut self) {
+    fn scan_slash(&mut self) -> Result<()> {
         if self.match_char('/') {
-            while let Some(c) = self.peek() {
-                if c == '\n' {
-                    break;
-                }
+            while self.peek() != Some('\n') && !self.at_end() {
                 self.advance();
             }
+        } else if self.match_char('*') {
+            while !self.at_end() {
+                if self.peek() == Some('\n') {
+                    self.line += 1;
+                }
+
+                if self.match_char('*') {
+                    if self.match_char('/') {
+                        return Ok(());
+                    }
+                    continue;
+                }
+
+                self.advance();
+            }
+
+            return Err(ScanError::UnterminatedComment { line: self.line });
         } else {
             self.add_token(TokenType::Slash);
         }
+
+        Ok(())
     }
 
     fn match_char(&mut self, expected: char) -> bool {
