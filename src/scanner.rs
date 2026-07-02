@@ -1,0 +1,202 @@
+use std::fmt;
+
+use crate::token::*;
+
+type Result<T> = std::result::Result<T, ScanError>;
+
+#[derive(Debug)]
+pub enum ScanError {
+    UnexpectedChar { line: usize, c: char },
+    UnterminatedStr { line: usize },
+}
+
+impl std::error::Error for ScanError {}
+
+impl fmt::Display for ScanError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::UnexpectedChar { line, c } => {
+                write!(f, "line: {} | Unexpected character: {}", line, c)
+            }
+            Self::UnterminatedStr { line } => {
+                write!(f, "line: {} | Unterminated string", line)
+            }
+        }
+    }
+}
+
+pub struct Scanner<'a> {
+    source: &'a str,
+    tokens: Vec<Token>,
+    start: usize,
+    current: usize,
+    line: usize,
+}
+
+impl<'a> Scanner<'a> {
+    pub fn new(source: &'a str) -> Self {
+        Scanner {
+            source: source,
+            tokens: Vec::new(),
+            start: 0,
+            current: 0,
+            line: 1,
+        }
+    }
+
+    pub fn scan_tokens(&mut self) -> Result<&[Token]> {
+        while !self.at_end() {
+            self.start = self.current;
+            self.scan_token()?;
+        }
+
+        self.tokens
+            .push(Token::new(TokenType::Eof, self.line, "".to_string(), None));
+
+        Ok(&self.tokens)
+    }
+
+    fn scan_token(&mut self) -> Result<()> {
+        let c = match self.advance() {
+            Some(character) => character,
+            None => return Ok(()),
+        };
+
+        match c {
+            '(' => self.add_token(TokenType::LParen),
+            ')' => self.add_token(TokenType::RParen),
+            '{' => self.add_token(TokenType::LBrace),
+            '}' => self.add_token(TokenType::RBrace),
+            ',' => self.add_token(TokenType::Comma),
+            '.' => self.add_token(TokenType::Dot),
+            '+' => self.add_token(TokenType::Plus),
+            '-' => self.add_token(TokenType::Minus),
+            '*' => self.add_token(TokenType::Star),
+            ';' => self.add_token(TokenType::Semicolon),
+            '!' => self.add_token_if_match('=', TokenType::BangEqual, TokenType::Bang),
+            '=' => self.add_token_if_match('=', TokenType::EqualEqual, TokenType::Equal),
+            '<' => self.add_token_if_match('=', TokenType::LesserEqual, TokenType::Lesser),
+            '>' => self.add_token_if_match('=', TokenType::GreaterEqual, TokenType::Greater),
+            '/' => self.scan_slash(),
+            '"' => self.scan_string()?,
+            '0'..='9' => self.scan_number()?,
+
+            '\n' => self.line += 1,
+
+            ' ' | '\t' | '\r' => {}
+            _ => return Err(ScanError::UnexpectedChar { line: self.line, c }),
+        }
+
+        Ok(())
+    }
+
+    fn scan_number(&mut self) -> Result<()> {
+        while let Some(c) = self.peek() {
+            if c.is_ascii_digit() {
+                self.advance();
+            } else {
+                break;
+            }
+        }
+
+        if self.peek() == Some('.') && self.peek_next().is_some_and(|c| c.is_ascii_digit()) {
+            self.advance();
+            while self.peek().is_some_and(|c| c.is_ascii_digit()) {
+                self.advance();
+            }
+        }
+
+        let lexeme = &self.source[self.start..self.current];
+        let number = lexeme
+            .parse()
+            .map_err(|_| ScanError::InvalidNumber { line: self.line })?;
+        self.add_token_with_literal(TokenType::Number, Some(Literal::Number(number)));
+
+        Ok(())
+    }
+
+    fn scan_string(&mut self) -> Result<()> {
+        while self.peek() != Some('"') && !self.at_end() {
+            if self.peek() == Some('\n') {
+                self.line += 1;
+            }
+            self.advance();
+        }
+
+        if self.at_end() {
+            return Err(ScanError::UnterminatedStr { line: self.line });
+        }
+        self.advance();
+        self.add_token_with_literal(
+            TokenType::String,
+            Some(Literal::String(
+                self.source[self.start + 1..self.current - 1].to_string(),
+            )),
+        );
+        Ok(())
+    }
+
+    fn scan_slash(&mut self) {
+        if self.match_char('/') {
+            while let Some(c) = self.peek() {
+                if c == '\n' {
+                    break;
+                }
+                self.advance();
+            }
+        } else {
+            self.add_token(TokenType::Slash);
+        }
+    }
+
+    fn match_char(&mut self, expected: char) -> bool {
+        if self.peek() == Some(expected) {
+            self.advance();
+            true
+        } else {
+            false
+        }
+    }
+
+    fn add_token(&mut self, token_type: TokenType) {
+        self.add_token_with_literal(token_type, None);
+    }
+
+    fn add_token_if_match(&mut self, expected: char, if_match: TokenType, otherwise: TokenType) {
+        if self.match_char(expected) {
+            self.add_token(if_match);
+        } else {
+            self.add_token(otherwise);
+        }
+    }
+
+    fn add_token_with_literal(&mut self, token_type: TokenType, literal: Option<Literal>) {
+        let lexeme = &self.source[self.start..self.current];
+        self.tokens.push(Token::new(
+            token_type,
+            self.line,
+            lexeme.to_string(),
+            literal,
+        ));
+    }
+
+    fn advance(&mut self) -> Option<char> {
+        let c = self.peek()?;
+        self.current += c.len_utf8();
+        Some(c)
+    }
+
+    fn peek(&self) -> Option<char> {
+        self.source[self.current..].chars().next()
+    }
+
+    fn peek_next(&self) -> Option<char> {
+        let mut chars = self.source[self.current..].chars();
+        chars.next();
+        chars.next()
+    }
+
+    fn at_end(&self) -> bool {
+        self.peek().is_none()
+    }
+}

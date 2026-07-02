@@ -1,0 +1,29 @@
+use std::{fs, process::exit};
+
+mod scanner;
+mod token;
+
+use scanner::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let args: Vec<String> = std::env::args().collect();
+
+    if args.len() != 2 {
+        println!("Usage: {} [script]", args[0]);
+        exit(1);
+    }
+
+    run_file(&args[1])?;
+
+    Ok(())
+}
+
+fn run_file(path: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let text = fs::read_to_string(path)?;
+    let mut scanner = Scanner::new(text.as_str());
+    let tokens = scanner.scan_tokens()?;
+    for token in tokens.iter() {
+        println!("{:?}", token);
+    }
+    Ok(())
+}
