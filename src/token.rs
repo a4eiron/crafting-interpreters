@@ -47,6 +47,9 @@ pub enum TokenType {
 pub enum Literal {
     Number(f64),
     String(String),
+    True,
+    False,
+    Nil,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -70,5 +73,13 @@ impl Token {
             lexeme,
             literal,
         }
+    }
+
+    pub fn _type(&self) -> &TokenType {
+        &self.token_type
+    }
+
+    pub fn literal(&self) -> Option<&Literal> {
+        self.literal.as_ref()
     }
 }

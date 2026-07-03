@@ -1,17 +1,23 @@
+// parser check
+// 1 + 2 - 3
+
+1 * (4 - 10)
+
+
 /*
  * multiline comments 
  */
 
 // single line comment
 
-var apple = "apple";
-var num = 10;
+// var apple = "apple";
+// var num = 10;
 
-print apple;
-print num;
+// print apple;
+// print num;
 
-print "dumbo";
-print 3.141;
+// print "dumbo";
+// print 3.141;
 
 /*
  * multiline comments 

@@ -43,7 +43,7 @@ pub struct Scanner<'a> {
 
 impl<'a> Scanner<'a> {
     pub fn new(source: &'a str) -> Self {
-        Scanner {
+        Self {
             source: source,
             tokens: Vec::new(),
             start: 0,
@@ -88,7 +88,7 @@ impl<'a> Scanner<'a> {
             '/' => self.scan_slash()?,
             '"' => self.scan_string()?,
             '0'..='9' => self.scan_number()?,
-            'a'..='z' | 'A'..='Z' | '_' => self.scan_identifier()?,
+            'a'..='z' | 'A'..='Z' | '_' => self.scan_identifier(),
             '\n' => self.line += 1,
             ' ' | '\t' | '\r' => {}
             _ => return Err(ScanError::UnexpectedChar { line: self.line, c }),
@@ -97,16 +97,12 @@ impl<'a> Scanner<'a> {
         Ok(())
     }
 
-    fn scan_identifier(&mut self) -> Result<()> {
-        while let Some(c) = self.peek() {
-            if c.is_alphanumeric() {
-                self.advance();
-            } else {
-                break;
-            }
+    fn scan_identifier(&mut self) {
+        while self.peek().is_some_and(|c| c.is_alphanumeric()) {
+            self.advance();
         }
 
-        let token = &self.source[self.start..self.current];
+        let token = self.current_lexeme();
 
         let token_type = match token {
             "var" => TokenType::Var,
@@ -128,17 +124,11 @@ impl<'a> Scanner<'a> {
         };
 
         self.add_token(token_type);
-
-        Ok(())
     }
 
     fn scan_number(&mut self) -> Result<()> {
-        while let Some(c) = self.peek() {
-            if c.is_ascii_digit() {
-                self.advance();
-            } else {
-                break;
-            }
+        while self.peek().is_some_and(|c| c.is_ascii_digit()) {
+            self.advance();
         }
 
         if self.peek() == Some('.') && self.peek_next().is_some_and(|c| c.is_ascii_digit()) {
@@ -148,7 +138,7 @@ impl<'a> Scanner<'a> {
             }
         }
 
-        let lexeme = &self.source[self.start..self.current];
+        let lexeme = self.current_lexeme();
         let number = lexeme
             .parse()
             .map_err(|_| ScanError::InvalidNumber { line: self.line })?;
@@ -207,6 +197,10 @@ impl<'a> Scanner<'a> {
         Ok(())
     }
 
+    fn current_lexeme(&self) -> &str {
+        &self.source[self.start..self.current]
+    }
+
     fn match_char(&mut self, expected: char) -> bool {
         if self.peek() == Some(expected) {
             self.advance();
@@ -229,7 +223,7 @@ impl<'a> Scanner<'a> {
     }
 
     fn add_token_with_literal(&mut self, token_type: TokenType, literal: Option<Literal>) {
-        let lexeme = &self.source[self.start..self.current];
+        let lexeme = self.current_lexeme();
         self.tokens.push(Token::new(
             token_type,
             self.line,
