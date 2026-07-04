@@ -1,8 +1,9 @@
 // parser check
 // 1 + 2 - 3
 
-1 * (4 - 10)
+// 1 * (4 - 10)
 
+1 == 2 ? "greater" : "smaller"
 
 /*
  * multiline comments 

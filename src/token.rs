@@ -11,6 +11,8 @@ pub enum TokenType {
     Dot,
     Comma,
     Semicolon,
+    Question,
+    Colon,
 
     Bang,
     BangEqual,
@@ -75,11 +77,18 @@ impl Token {
         }
     }
 
-    pub fn _type(&self) -> &TokenType {
-        &self.token_type
+    pub fn token_type(&self) -> TokenType {
+        self.token_type
     }
 
     pub fn literal(&self) -> Option<&Literal> {
         self.literal.as_ref()
+    }
+    pub fn line(&self) -> usize {
+        self.line
+    }
+
+    pub fn lexeme(&self) -> &str {
+        &self.lexeme
     }
 }

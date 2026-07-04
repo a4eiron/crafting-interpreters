@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 use std::fmt;
 
 use crate::token::*;
@@ -7,15 +6,33 @@ type Result<T> = std::result::Result<T, ParseError>;
 
 #[derive(Debug)]
 pub enum ParseError {
-    UnexpectedToken(String),
-    SyntaxError,
+    UnexpectedToken { found: Token },
+    ExpectedToken { expected: TokenType, found: Token },
 }
 
 impl std::error::Error for ParseError {}
 
 impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "")
+        match self {
+            Self::UnexpectedToken { found } => {
+                write!(
+                    f,
+                    "line: {} | unexpected token: '{}'",
+                    found.line(),
+                    found.lexeme()
+                )
+            }
+            Self::ExpectedToken { expected, found } => {
+                write!(
+                    f,
+                    "line: {} | expected {:?} found {}",
+                    found.line(),
+                    expected,
+                    found.lexeme()
+                )
+            }
+        }
     }
 }
 
@@ -29,6 +46,11 @@ pub enum Expr {
         left: Box<Expr>,
         right: Box<Expr>,
         operator: Token,
+    },
+    Conditional {
+        condition: Box<Expr>,
+        then_branch: Box<Expr>,
+        else_branch: Box<Expr>,
     },
     Literal(Literal),
     Grouping(Box<Expr>),
@@ -49,11 +71,36 @@ impl<'a> Parser<'a> {
 
     pub fn parse(&mut self) -> Result<Expr> {
         // TODO/CHECK: null on syntax error
-        self.expression()
+        let expr = self.expression()?;
+
+        if !self.at_end() {
+            return Err(ParseError::UnexpectedToken {
+                found: self.peek().clone(),
+            });
+        }
+
+        Ok(expr)
     }
 
     fn expression(&mut self) -> Result<Expr> {
-        self.equality()
+        self.conditional()
+    }
+
+    fn conditional(&mut self) -> Result<Expr> {
+        let mut expr = self.equality()?;
+
+        while self.match_token(&[TokenType::Question]) {
+            let then_branch = self.expression()?;
+            self.consume(TokenType::Colon)?;
+            let else_branch = self.conditional()?;
+
+            expr = Expr::Conditional {
+                condition: Box::new(expr),
+                then_branch: Box::new(then_branch),
+                else_branch: Box::new(else_branch),
+            }
+        }
+        Ok(expr)
     }
 
     fn equality(&mut self) -> Result<Expr> {
@@ -159,46 +206,44 @@ impl<'a> Parser<'a> {
 
         if self.match_token(&[TokenType::LParen]) {
             let expr = self.expression()?;
-            self.consume(&TokenType::RParen, "Expect ')' after expression")?;
+            self.consume(TokenType::RParen)?;
             return Ok(Expr::Grouping(Box::new(expr)));
         }
 
-        return Err(ParseError::UnexpectedToken(format!(
-            "{:?}",
-            self.peek()._type()
-        )));
+        return Err(ParseError::UnexpectedToken {
+            found: self.peek().clone(),
+        });
     }
 
-    fn consume(&mut self, token_type: &TokenType, message: &str) -> Result<Token> {
+    fn consume(&mut self, token_type: TokenType) -> Result<Token> {
         if self.check(token_type) {
             return Ok(self.advance());
         }
 
-        // TODO: err enum
-        return Err(ParseError::UnexpectedToken(format!(
-            "{:?} {}",
-            self.peek(),
-            message
-        )));
+        return Err(ParseError::ExpectedToken {
+            expected: token_type,
+            found: self.peek().clone(),
+        });
     }
 
     fn synchronize(&mut self) {
         self.advance();
 
         while !self.at_end() {
-            if self.previous()._type() == &TokenType::Semicolon {
+            if self.previous().token_type() == TokenType::Semicolon {
                 return;
             }
 
-            match self.peek()._type() {
+            if matches!(
+                self.peek().token_type(),
                 TokenType::Class
-                | TokenType::Var
-                | TokenType::For
-                | TokenType::If
-                | TokenType::While
-                | TokenType::Print
-                | TokenType::Return => return,
-                _ => {}
+                    | TokenType::Var
+                    | TokenType::For
+                    | TokenType::If
+                    | TokenType::While
+                    | TokenType::Print
+            ) {
+                return;
             }
             self.advance();
         }
@@ -206,7 +251,7 @@ impl<'a> Parser<'a> {
 
     fn match_token(&mut self, types: &[TokenType]) -> bool {
         for token_type in types {
-            if self.check(token_type) {
+            if self.check(token_type.to_owned()) {
                 self.advance();
                 return true;
             }
@@ -215,11 +260,11 @@ impl<'a> Parser<'a> {
         false
     }
 
-    fn check(&self, token_type: &TokenType) -> bool {
+    fn check(&self, token_type: TokenType) -> bool {
         if self.at_end() {
             false
         } else {
-            self.peek()._type() == token_type
+            self.peek().token_type() == token_type
         }
     }
 
@@ -240,6 +285,6 @@ impl<'a> Parser<'a> {
     }
 
     fn at_end(&self) -> bool {
-        self.current >= self.tokens.len()
+        self.peek().token_type() == TokenType::Eof
     }
 }

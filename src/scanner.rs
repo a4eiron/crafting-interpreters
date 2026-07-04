@@ -81,6 +81,8 @@ impl<'a> Scanner<'a> {
             '-' => self.add_token(TokenType::Minus),
             '*' => self.add_token(TokenType::Star),
             ';' => self.add_token(TokenType::Semicolon),
+            '?' => self.add_token(TokenType::Question),
+            ':' => self.add_token(TokenType::Colon),
             '!' => self.add_token_if_match('=', TokenType::BangEqual, TokenType::Bang),
             '=' => self.add_token_if_match('=', TokenType::EqualEqual, TokenType::Equal),
             '<' => self.add_token_if_match('=', TokenType::LesserEqual, TokenType::Lesser),
