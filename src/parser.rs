@@ -1,3 +1,4 @@
+// TODO: Rc instead of cloning everywhere..(when the time comes)
 use std::fmt;
 
 use crate::token::*;
@@ -242,6 +243,7 @@ impl<'a> Parser<'a> {
                     | TokenType::If
                     | TokenType::While
                     | TokenType::Print
+                    | TokenType::Return
             ) {
                 return;
             }
@@ -251,7 +253,7 @@ impl<'a> Parser<'a> {
 
     fn match_token(&mut self, types: &[TokenType]) -> bool {
         for token_type in types {
-            if self.check(token_type.to_owned()) {
+            if self.check(*token_type) {
                 self.advance();
                 return true;
             }
@@ -261,18 +263,13 @@ impl<'a> Parser<'a> {
     }
 
     fn check(&self, token_type: TokenType) -> bool {
-        if self.at_end() {
-            false
-        } else {
-            self.peek().token_type() == token_type
-        }
+        !self.at_end() && self.peek().token_type() == token_type
     }
 
     fn advance(&mut self) -> Token {
         if !self.at_end() {
             self.current += 1;
         }
-
         return self.previous();
     }
 

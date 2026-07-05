@@ -1,9 +1,11 @@
 use std::{fs, process::exit};
 
+mod interpreter;
 mod parser;
 mod scanner;
 mod token;
 
+use interpreter::*;
 use parser::*;
 use scanner::*;
 
@@ -28,7 +30,11 @@ fn run_file(path: &str) -> Result<(), Box<dyn std::error::Error>> {
     let mut parser = Parser::new(tokens);
     let expr = parser.parse()?;
 
-    print!("{expr:#?}");
+    let interpreter = Interpreter::new();
+    let val = interpreter.interpret(&expr)?;
+    println!("{val}");
+
+    // print!("{expr:#?}");
 
     // for token in tokens.iter() {
     //     println!("{:?}", token);
