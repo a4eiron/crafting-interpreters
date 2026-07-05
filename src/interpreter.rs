@@ -6,16 +6,16 @@ use crate::token::{Literal, Token, TokenType};
 type Result<T> = std::result::Result<T, RuntimeError>;
 
 #[derive(Debug)]
-pub enum RuntimeError {
-    InvalidLiteral,
-    InvalidOperand,
+pub struct RuntimeError {
+    token: Token,
+    message: String,
 }
 
 impl std::error::Error for RuntimeError {}
 
 impl fmt::Display for RuntimeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "")
+        write!(f, "line: {} | {}", self.token.line(), self.message)
     }
 }
 
@@ -89,27 +89,55 @@ fn literal(literal: &Literal) -> Result<Value> {
 }
 
 fn unary(operator: &Token, value: Value) -> Result<Value> {
-    match (operator.token_type(), value) {
-        (TokenType::Bang, Value::Bool(b)) => Ok(Value::Bool(!b)),
-        (TokenType::Minus, Value::Number(n)) => Ok(Value::Number(-n)),
-        _ => Err(RuntimeError::InvalidLiteral),
+    match operator.token_type() {
+        TokenType::Minus => match value {
+            Value::Number(n) => Ok(Value::Number(-n)),
+            _ => Err(RuntimeError {
+                token: operator.clone(),
+                message: String::from("operand must be a number"),
+            }),
+        },
+        TokenType::Bang => Ok(Value::Bool(!is_truthy(&value))),
+        _ => unreachable!(),
     }
 }
 
 fn binary(operator: &Token, left: Value, right: Value) -> Result<Value> {
+    if matches!(
+        operator.token_type(),
+        TokenType::Minus
+            | TokenType::Star
+            | TokenType::Slash
+            | TokenType::Greater
+            | TokenType::GreaterEqual
+            | TokenType::Lesser
+            | TokenType::LesserEqual
+    ) {
+        if !matches!(left, Value::Number(_)) || !matches!(right, Value::Number(_)) {
+            return Err(RuntimeError {
+                token: operator.clone(),
+                message: String::from("operands must be numbers"),
+            });
+        }
+    }
     match (operator.token_type(), left, right) {
         (TokenType::Plus, Value::Number(a), Value::Number(b)) => Ok(Value::Number(a + b)),
+        (TokenType::Plus, Value::String(a), Value::String(b)) => Ok(Value::String(a + &b)),
         (TokenType::Minus, Value::Number(a), Value::Number(b)) => Ok(Value::Number(a - b)),
         (TokenType::Star, Value::Number(a), Value::Number(b)) => Ok(Value::Number(a * b)),
         (TokenType::Slash, Value::Number(a), Value::Number(b)) => Ok(Value::Number(a / b)),
-        (TokenType::Plus, Value::String(a), Value::String(b)) => Ok(Value::String(a + &b)),
         (TokenType::Greater, Value::Number(a), Value::Number(b)) => Ok(Value::Bool(a > b)),
         (TokenType::GreaterEqual, Value::Number(a), Value::Number(b)) => Ok(Value::Bool(a >= b)),
         (TokenType::Lesser, Value::Number(a), Value::Number(b)) => Ok(Value::Bool(a < b)),
         (TokenType::LesserEqual, Value::Number(a), Value::Number(b)) => Ok(Value::Bool(a <= b)),
         (TokenType::BangEqual, Value::Number(a), Value::Number(b)) => Ok(Value::Bool(a != b)),
         (TokenType::EqualEqual, Value::Number(a), Value::Number(b)) => Ok(Value::Bool(a == b)),
-        _ => Err(RuntimeError::InvalidOperand),
+        (TokenType::BangEqual, Value::String(a), Value::String(b)) => Ok(Value::Bool(a != b)),
+        (TokenType::EqualEqual, Value::String(a), Value::String(b)) => Ok(Value::Bool(a == b)),
+        _ => Err(RuntimeError {
+            token: operator.clone(),
+            message: String::from("operands must be numbers or strings"),
+        }),
     }
 }
 

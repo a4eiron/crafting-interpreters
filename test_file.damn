@@ -3,7 +3,21 @@
 
 // 1 * (4 - 10)
 
-1 == 2 ? "greater" : "smaller"
+// 1 == 2 ? "greater" : "smaller"
+
+// nil
+
+// 2 * (3 / -3)
+
+// 2 * (3 / -"muffin")
+
+// "ABC" == "ABC"
+
+// "abc" != "abc"
+
+// 3 / "str"
+
+// !false
 
 /*
  * multiline comments 

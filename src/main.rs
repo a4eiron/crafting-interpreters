@@ -9,7 +9,7 @@ use interpreter::*;
 use parser::*;
 use scanner::*;
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() {
     let args: Vec<String> = std::env::args().collect();
 
     if args.len() != 2 {
@@ -17,9 +17,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         exit(1);
     }
 
-    run_file(&args[1])?;
-
-    Ok(())
+    if let Err(err) = run_file(&args[1]) {
+        eprintln!("{err}");
+        std::process::exit(70); // same exit code the book uses for runtime errors
+    }
 }
 
 fn run_file(path: &str) -> Result<(), Box<dyn std::error::Error>> {

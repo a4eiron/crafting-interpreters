@@ -27,7 +27,7 @@ impl fmt::Display for ParseError {
             Self::ExpectedToken { expected, found } => {
                 write!(
                     f,
-                    "line: {} | expected {:?} found {}",
+                    "line: {} | expected '{}' found {}",
                     found.line(),
                     expected,
                     found.lexeme()

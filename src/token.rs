@@ -1,3 +1,5 @@
+use std::fmt;
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum TokenType {
     LParen,
@@ -90,5 +92,57 @@ impl Token {
 
     pub fn lexeme(&self) -> &str {
         &self.lexeme
+    }
+}
+
+impl fmt::Display for TokenType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let text = match self {
+            TokenType::LParen => "(",
+            TokenType::RParen => ")",
+            TokenType::LBrace => "{",
+            TokenType::RBrace => "}",
+            TokenType::Plus => "+",
+            TokenType::Minus => "-",
+            TokenType::Star => "*",
+            TokenType::Slash => "/",
+            TokenType::Dot => ".",
+            TokenType::Comma => ",",
+            TokenType::Semicolon => ";",
+            TokenType::Question => "?",
+            TokenType::Colon => ":",
+
+            TokenType::Bang => "!",
+            TokenType::BangEqual => "!=",
+            TokenType::Equal => "=",
+            TokenType::EqualEqual => "==",
+            TokenType::Greater => ">",
+            TokenType::GreaterEqual => ">=",
+            TokenType::Lesser => "<",
+            TokenType::LesserEqual => "<=",
+
+            TokenType::Var => "var",
+            TokenType::If => "if",
+            TokenType::Else => "else",
+            TokenType::While => "while",
+            TokenType::For => "for",
+            TokenType::Return => "return",
+            TokenType::Nil => "nil",
+            TokenType::And => "and",
+            TokenType::Or => "or",
+            TokenType::Print => "print",
+            TokenType::Class => "class",
+            TokenType::This => "this",
+            TokenType::Super => "super",
+
+            TokenType::Identifier => "identifier",
+            TokenType::String => "string",
+            TokenType::Number => "number",
+            TokenType::True => "true",
+            TokenType::False => "false",
+            TokenType::Eof => "EOF",
+        };
+
+        write!(f, "{text}")
     }
 }
