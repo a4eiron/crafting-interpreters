@@ -1,23 +1,45 @@
 // parser check
 // 2 + 2 - 3
 
-// 1 * (4 - 10)
+1 * (4 - 10)
 
 // 1 == 2 ? "greater" : "smaller"
 
 // nil
 
+// nil != true
+
 // 2 * (3 / -3)
 
 // 2 * (3 / -"muffin")
+
+// "10" + 3
 
 // "ABC" == "ABC"
 
 // "abc" != "abc"
 
+// "Abc" == "abc"
+
+// "Abc" != "ABc"
+
+// true == true
+
+// false == true
+
+// true != false
+
+// "s" == true
+
+// 1.0 != false
+
+// 2 == 2
+
 // 3 / "str"
 
 // !false
+
+// 3 / 0
 
 /*
  * multiline comments 

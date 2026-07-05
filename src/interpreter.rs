@@ -32,7 +32,7 @@ impl fmt::Display for Value {
         match self {
             Self::Number(n) => write!(f, "{}", n),
             Self::String(s) => write!(f, "{}", s),
-            Self::Nil => write!(f, "nil"),
+            Self::Nil => write!(f, "<nil>"),
             Self::Bool(b) => write!(f, "{}", b),
         }
     }
@@ -103,26 +103,13 @@ fn unary(operator: &Token, value: Value) -> Result<Value> {
 }
 
 fn binary(operator: &Token, left: Value, right: Value) -> Result<Value> {
-    if matches!(
-        operator.token_type(),
-        TokenType::Minus
-            | TokenType::Star
-            | TokenType::Slash
-            | TokenType::Greater
-            | TokenType::GreaterEqual
-            | TokenType::Lesser
-            | TokenType::LesserEqual
-    ) {
-        if !matches!(left, Value::Number(_)) || !matches!(right, Value::Number(_)) {
-            return Err(RuntimeError {
-                token: operator.clone(),
-                message: String::from("operands must be numbers"),
-            });
-        }
-    }
+    let err = |msg: &str| {
+        Err(RuntimeError {
+            token: operator.clone(),
+            message: String::from(msg),
+        })
+    };
     match (operator.token_type(), left, right) {
-        (TokenType::Plus, Value::Number(a), Value::Number(b)) => Ok(Value::Number(a + b)),
-        (TokenType::Plus, Value::String(a), Value::String(b)) => Ok(Value::String(a + &b)),
         (TokenType::Minus, Value::Number(a), Value::Number(b)) => Ok(Value::Number(a - b)),
         (TokenType::Star, Value::Number(a), Value::Number(b)) => Ok(Value::Number(a * b)),
         (TokenType::Slash, Value::Number(a), Value::Number(b)) => Ok(Value::Number(a / b)),
@@ -130,14 +117,34 @@ fn binary(operator: &Token, left: Value, right: Value) -> Result<Value> {
         (TokenType::GreaterEqual, Value::Number(a), Value::Number(b)) => Ok(Value::Bool(a >= b)),
         (TokenType::Lesser, Value::Number(a), Value::Number(b)) => Ok(Value::Bool(a < b)),
         (TokenType::LesserEqual, Value::Number(a), Value::Number(b)) => Ok(Value::Bool(a <= b)),
-        (TokenType::BangEqual, Value::Number(a), Value::Number(b)) => Ok(Value::Bool(a != b)),
+        (TokenType::Plus, Value::Number(a), Value::Number(b)) => Ok(Value::Number(a + b)),
+        (TokenType::Plus, Value::String(a), Value::String(b)) => Ok(Value::String(a + &b)),
+        (TokenType::Plus, _, _) => err("operands must be numbers or strings"),
+
+        (TokenType::EqualEqual, ref a, Value::Bool(b)) => Ok(Value::Bool(is_truthy(a) == b)),
+        (TokenType::EqualEqual, Value::Bool(a), ref b) => Ok(Value::Bool(a == is_truthy(b))),
         (TokenType::EqualEqual, Value::Number(a), Value::Number(b)) => Ok(Value::Bool(a == b)),
-        (TokenType::BangEqual, Value::String(a), Value::String(b)) => Ok(Value::Bool(a != b)),
         (TokenType::EqualEqual, Value::String(a), Value::String(b)) => Ok(Value::Bool(a == b)),
-        _ => Err(RuntimeError {
-            token: operator.clone(),
-            message: String::from("operands must be numbers or strings"),
-        }),
+        // (TokenType::EqualEqual, Value::Bool(a), Value::Bool(b)) => Ok(Value::Bool(a == b)),
+        (TokenType::EqualEqual, _, _) => Ok(Value::Bool(false)),
+
+        (TokenType::BangEqual, ref a, Value::Bool(b)) => Ok(Value::Bool(is_truthy(a) != b)),
+        (TokenType::BangEqual, Value::Bool(a), ref b) => Ok(Value::Bool(a != is_truthy(b))),
+        (TokenType::BangEqual, Value::Number(a), Value::Number(b)) => Ok(Value::Bool(a != b)),
+        (TokenType::BangEqual, Value::String(a), Value::String(b)) => Ok(Value::Bool(a != b)),
+        // (TokenType::BangEqual, Value::Bool(a), Value::Bool(b)) => Ok(Value::Bool(a != b)),
+        (
+            TokenType::Minus
+            | TokenType::Star
+            | TokenType::Slash
+            | TokenType::Greater
+            | TokenType::GreaterEqual
+            | TokenType::Lesser
+            | TokenType::LesserEqual,
+            _,
+            _,
+        ) => err("operands must be numbers"),
+        _ => err("unknown operator"),
     }
 }
 
@@ -145,6 +152,7 @@ fn is_truthy(value: &Value) -> bool {
     match value {
         Value::Nil => false,
         Value::Bool(b) => *b,
-        _ => true,
+        Value::String(s) => !s.is_empty(),
+        Value::Number(n) => *n != 0.0,
     }
 }
