@@ -49,6 +49,7 @@ pub enum Expr {
 pub enum Stmt {
     Print(Expr),
     Expression(Expr),
+    Block(Vec<Stmt>),
     Var { name: Token, initializer: Expr },
 }
 
@@ -91,6 +92,8 @@ impl<'a> Parser<'a> {
     fn statement(&mut self) -> Result<Stmt> {
         if self.match_token(&[TokenType::Print]) {
             self.print_stmt()
+        } else if self.match_token(&[TokenType::LBrace]) {
+            Ok(Stmt::Block(self.block()?))
         } else {
             self.expr_stmt()
         }
@@ -120,6 +123,18 @@ impl<'a> Parser<'a> {
             name: identifier,
             initializer: initializer,
         })
+    }
+
+    fn block(&mut self) -> Result<Vec<Stmt>> {
+        let mut stmts = Vec::new();
+
+        while !self.check(TokenType::RBrace) && !self.at_end() {
+            let stmt = self.declaration()?;
+            stmts.push(stmt);
+        }
+
+        self.consume(TokenType::RBrace)?;
+        Ok(stmts)
     }
 
     fn expression(&mut self) -> Result<Expr> {

@@ -1,8 +1,8 @@
-use std::fmt;
-
 use crate::environment::Environment;
 use crate::parser::{Expr, Stmt};
 use crate::token::{Literal, Token, TokenType};
+
+use std::{cell::RefCell, fmt, rc::Rc};
 
 pub type Result<T> = std::result::Result<T, RuntimeError>;
 
@@ -40,7 +40,7 @@ impl fmt::Display for Value {
 }
 
 pub struct Interpreter {
-    environment: Environment,
+    environment: Rc<RefCell<Environment>>,
 }
 
 impl Interpreter {
@@ -52,18 +52,40 @@ impl Interpreter {
 
     pub fn interpret(&mut self, stmts: &[Stmt]) -> Result<()> {
         for stmt in stmts {
-            match stmt {
-                Stmt::Var { name, initializer } => {
-                    let value = self.evaluate(initializer)?;
-                    self.environment.define(name.lexeme().to_string(), value);
-                }
-                Stmt::Print(expr) => {
-                    let value = self.evaluate(expr)?;
-                    println!("{value}");
-                }
-                Stmt::Expression(expr) => {
-                    self.evaluate(expr)?;
-                }
+            self.execute(stmt)?;
+        }
+        Ok(())
+    }
+
+    fn execute_block(&mut self, stmts: &[Stmt], env: Environment) -> Result<()> {
+        let previous = std::mem::replace(&mut self.environment, Rc::new(RefCell::new(env)));
+        for stmt in stmts {
+            self.execute(stmt)?;
+        }
+        self.environment = previous;
+        Ok(())
+    }
+
+    fn execute(&mut self, stmt: &Stmt) -> Result<()> {
+        match stmt {
+            Stmt::Var { name, initializer } => {
+                let value = self.evaluate(initializer)?;
+                self.environment
+                    .borrow_mut()
+                    .define(name.lexeme().to_string(), value);
+            }
+            Stmt::Print(expr) => {
+                let value = self.evaluate(expr)?;
+                println!("{value}");
+            }
+            Stmt::Expression(expr) => {
+                self.evaluate(expr)?;
+            }
+            Stmt::Block(stmts) => {
+                self.execute_block(
+                    stmts,
+                    Environment::new_with_env(Rc::clone(&self.environment)),
+                )?;
             }
         }
         Ok(())
@@ -71,7 +93,7 @@ impl Interpreter {
 
     fn evaluate(&mut self, expr: &Expr) -> Result<Value> {
         match expr {
-            Expr::Var(t) => self.environment.get(t).cloned(),
+            Expr::Var(t) => self.environment.borrow().get(t),
             Expr::Grouping(g) => self.evaluate(g),
             Expr::Literal(l) => literal(l),
             Expr::Unary { operator, right } => {
@@ -101,7 +123,7 @@ impl Interpreter {
             }
             Expr::Assignment { name, value } => {
                 let v = self.evaluate(value)?;
-                self.environment.assign(name, v.clone())?;
+                self.environment.borrow_mut().assign(name, v.clone())?;
                 Ok(v)
             }
         }
