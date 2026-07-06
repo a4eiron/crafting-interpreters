@@ -104,9 +104,9 @@ impl Interpreter {
 }
 
 fn literal(literal: &Literal) -> Result<Value> {
-    match *literal {
-        Literal::Number(n) => Ok(Value::Number(n)),
-        Literal::String(ref s) => Ok(Value::String(s.clone())),
+    match literal {
+        Literal::Number(n) => Ok(Value::Number(*n)),
+        Literal::String(s) => Ok(Value::String(s.clone())),
         Literal::True => Ok(Value::Bool(true)),
         Literal::False => Ok(Value::Bool(false)),
         Literal::Nil => Ok(Value::Nil),
