@@ -1,14 +1,15 @@
 use std::fmt;
 
-use crate::parser::Expr;
+use crate::environment::Environment;
+use crate::parser::{Expr, Stmt};
 use crate::token::{Literal, Token, TokenType};
 
-type Result<T> = std::result::Result<T, RuntimeError>;
+pub type Result<T> = std::result::Result<T, RuntimeError>;
 
 #[derive(Debug)]
 pub struct RuntimeError {
-    token: Token,
-    message: String,
+    pub token: Token,
+    pub message: String,
 }
 
 impl std::error::Error for RuntimeError {}
@@ -38,19 +39,43 @@ impl fmt::Display for Value {
     }
 }
 
-pub struct Interpreter {}
+pub struct Interpreter {
+    environment: Environment,
+}
 
 impl Interpreter {
     pub fn new() -> Self {
-        Self {}
+        Self {
+            environment: Environment::new(),
+        }
     }
 
-    pub fn interpret(&self, expr: &Expr) -> Result<Value> {
+    pub fn interpret(&mut self, stmts: &[Stmt]) -> Result<()> {
+        for stmt in stmts {
+            match stmt {
+                Stmt::Var { name, initializer } => {
+                    let value = self.evaluate(initializer)?;
+                    self.environment.define(name.lexeme().to_string(), value);
+                }
+                Stmt::Print(expr) => {
+                    let value = self.evaluate(expr)?;
+                    println!("{value}");
+                }
+                Stmt::Expression(expr) => {
+                    self.evaluate(expr)?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn evaluate(&self, expr: &Expr) -> Result<Value> {
         match expr {
-            Expr::Grouping(g) => self.interpret(g),
+            Expr::Var(t) => self.environment.get(t).cloned(),
+            Expr::Grouping(g) => self.evaluate(g),
             Expr::Literal(l) => literal(l),
             Expr::Unary { operator, right } => {
-                let value = self.interpret(right)?;
+                let value = self.evaluate(right)?;
                 unary(operator, value)
             }
             Expr::Binary {
@@ -58,8 +83,8 @@ impl Interpreter {
                 right,
                 operator,
             } => {
-                let v_left = self.interpret(left)?;
-                let v_right = self.interpret(right)?;
+                let v_left = self.evaluate(left)?;
+                let v_right = self.evaluate(right)?;
                 binary(operator, v_left, v_right)
             }
             Expr::Conditional {
@@ -67,11 +92,11 @@ impl Interpreter {
                 then_branch,
                 else_branch,
             } => {
-                let v_condition = self.interpret(condition)?;
+                let v_condition = self.evaluate(condition)?;
                 if is_truthy(&v_condition) {
-                    self.interpret(then_branch)
+                    self.evaluate(then_branch)
                 } else {
-                    self.interpret(else_branch)
+                    self.evaluate(else_branch)
                 }
             }
         }

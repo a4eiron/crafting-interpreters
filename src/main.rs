@@ -1,5 +1,6 @@
 use std::{fs, process::exit};
 
+mod environment;
 mod interpreter;
 mod parser;
 mod scanner;
@@ -19,21 +20,20 @@ fn main() {
 
     if let Err(err) = run_file(&args[1]) {
         eprintln!("{err}");
-        std::process::exit(70); // same exit code the book uses for runtime errors
+        std::process::exit(70);
     }
 }
 
-fn run_file(path: &str) -> Result<(), Box<dyn std::error::Error>> {
+fn run_file(path: &str) -> std::result::Result<(), Box<dyn std::error::Error>> {
     let text = fs::read_to_string(path)?;
     let mut scanner = Scanner::new(text.as_str());
     let tokens = scanner.scan_tokens()?;
 
     let mut parser = Parser::new(tokens);
-    let expr = parser.parse()?;
+    let stmts = parser.parse()?;
 
-    let interpreter = Interpreter::new();
-    let val = interpreter.interpret(&expr)?;
-    println!("{val}");
+    let mut interpreter = Interpreter::new();
+    interpreter.interpret(&stmts)?;
 
     // print!("{expr:#?}");
 

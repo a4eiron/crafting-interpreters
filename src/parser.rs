@@ -15,30 +15,28 @@ impl std::error::Error for ParseError {}
 
 impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::UnexpectedToken { found } => {
-                write!(
-                    f,
-                    "line: {} | unexpected token: '{}'",
-                    found.line(),
-                    found.lexeme()
-                )
-            }
-            Self::ExpectedToken { expected, found } => {
-                write!(
-                    f,
-                    "line: {} | expected '{}' found {}",
-                    found.line(),
-                    expected,
-                    found.lexeme()
-                )
-            }
-        }
+        let text = match self {
+            Self::UnexpectedToken { found } => format!(
+                "line: {} | unexpected token: '{}'",
+                found.line(),
+                found.lexeme()
+            ),
+            Self::ExpectedToken { expected, found } => format!(
+                "line: {} | expected '{}' found {}",
+                found.line(),
+                expected,
+                found.lexeme()
+            ),
+        };
+
+        write!(f, "{}", text)
     }
 }
 
 #[derive(Debug)]
 pub enum Expr {
+    Literal(Literal),
+    Grouping(Box<Expr>),
     Unary {
         operator: Token,
         right: Box<Expr>,
@@ -53,8 +51,14 @@ pub enum Expr {
         then_branch: Box<Expr>,
         else_branch: Box<Expr>,
     },
-    Literal(Literal),
-    Grouping(Box<Expr>),
+    Var(Token),
+}
+
+#[derive(Debug)]
+pub enum Stmt {
+    Print(Expr),
+    Expression(Expr),
+    Var { name: Token, initializer: Expr },
 }
 
 pub struct Parser<'a> {
@@ -70,17 +74,57 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse(&mut self) -> Result<Expr> {
+    pub fn parse(&mut self) -> Result<Vec<Stmt>> {
         // TODO/CHECK: null on syntax error
-        let expr = self.expression()?;
-
-        if !self.at_end() {
-            return Err(ParseError::UnexpectedToken {
-                found: self.peek().clone(),
-            });
+        let mut stmts: Vec<Stmt> = Vec::new();
+        while !self.at_end() {
+            let stmt = self.declaration()?;
+            stmts.push(stmt);
         }
 
-        Ok(expr)
+        Ok(stmts)
+    }
+
+    fn declaration(&mut self) -> Result<Stmt> {
+        if self.match_token(&[TokenType::Var]) {
+            self.var_declaration()
+        } else {
+            self.statement()
+        }
+    }
+
+    fn statement(&mut self) -> Result<Stmt> {
+        if self.match_token(&[TokenType::Print]) {
+            self.print_stmt()
+        } else {
+            self.expr_stmt()
+        }
+    }
+
+    fn print_stmt(&mut self) -> Result<Stmt> {
+        let expr = self.expression()?;
+        self.consume(TokenType::Semicolon)?;
+        Ok(Stmt::Print(expr))
+    }
+
+    fn expr_stmt(&mut self) -> Result<Stmt> {
+        let expr = self.expression()?;
+        self.consume(TokenType::Semicolon)?;
+        Ok(Stmt::Expression(expr))
+    }
+
+    fn var_declaration(&mut self) -> Result<Stmt> {
+        let identifier = self.consume(TokenType::Identifier)?;
+        let mut initializer = Expr::Literal(Literal::Nil);
+
+        if self.match_token(&[TokenType::Equal]) {
+            initializer = self.expression()?;
+        }
+        self.consume(TokenType::Semicolon)?;
+        Ok(Stmt::Var {
+            name: identifier,
+            initializer: initializer,
+        })
     }
 
     fn expression(&mut self) -> Result<Expr> {
@@ -203,6 +247,10 @@ impl<'a> Parser<'a> {
             if let Some(literal) = self.previous().literal().cloned() {
                 return Ok(Expr::Literal(literal));
             }
+        }
+
+        if self.match_token(&[TokenType::Identifier]) {
+            return Ok(Expr::Var(self.previous()));
         }
 
         if self.match_token(&[TokenType::LParen]) {

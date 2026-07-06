@@ -1,61 +1,13 @@
-// parser check
-// 2 + 2 - 3
+// print "hello";
+// print 10 + 20;
+// print 2 * (4-10);
+// print true == true;
+// print false == true;
+// print nil == false;
+// print "" == false;
+// print 0 == true;
 
-1 * (4 - 10)
 
-// 1 == 2 ? "greater" : "smaller"
-
-// nil
-
-// nil != true
-
-// 2 * (3 / -3)
-
-// 2 * (3 / -"muffin")
-
-// "10" + 3
-
-// "ABC" == "ABC"
-
-// "abc" != "abc"
-
-// "Abc" == "abc"
-
-// "Abc" != "ABc"
-
-// true == true
-
-// false == true
-
-// true != false
-
-// "s" == true
-
-// 1.0 != false
-
-// 2 == 2
-
-// 3 / "str"
-
-// !false
-
-// 3 / 0
-
-/*
- * multiline comments 
- */
-
-// single line comment
-
-// var apple = "apple";
-// var num = 10;
-
-// print apple;
-// print num;
-
-// print "dumbo";
-// print 3.141;
-
-/*
- * multiline comments 
- */
+var a = 10;
+var b = 20;
+print a + b;
