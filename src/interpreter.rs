@@ -70,9 +70,7 @@ impl Interpreter {
         match stmt {
             Stmt::Var { name, initializer } => {
                 let value = self.evaluate(initializer)?;
-                self.environment
-                    .borrow_mut()
-                    .define(name.lexeme().to_string(), value);
+                self.environment.borrow_mut().define(name, value)?;
             }
             Stmt::Print(expr) => {
                 let value = self.evaluate(expr)?;

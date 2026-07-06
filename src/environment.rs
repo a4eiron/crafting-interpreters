@@ -1,6 +1,4 @@
-use std::cell::RefCell;
-use std::collections::HashMap;
-use std::rc::Rc;
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::interpreter::{Result, RuntimeError, Value};
 use crate::token::Token;
@@ -25,8 +23,19 @@ impl Environment {
             enclosing: Some(enclosing),
         }
     }
-    pub fn define(&mut self, name: String, value: Value) {
-        self.values.insert(name, value);
+    pub fn define(&mut self, name: &Token, value: Value) -> Result<()> {
+        if self.values.contains_key(name.lexeme()) {
+            return Err(RuntimeError {
+                token: name.clone(),
+                message: format!(
+                    "Variable '{}' has already been declared in this scope.",
+                    name.lexeme()
+                ),
+            });
+        }
+
+        self.values.insert(name.lexeme().to_string(), value);
+        Ok(())
     }
 
     pub fn assign(&mut self, name: &Token, value: Value) -> Result<()> {
