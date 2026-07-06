@@ -69,7 +69,7 @@ impl Interpreter {
         Ok(())
     }
 
-    fn evaluate(&self, expr: &Expr) -> Result<Value> {
+    fn evaluate(&mut self, expr: &Expr) -> Result<Value> {
         match expr {
             Expr::Var(t) => self.environment.get(t).cloned(),
             Expr::Grouping(g) => self.evaluate(g),
@@ -98,6 +98,11 @@ impl Interpreter {
                 } else {
                     self.evaluate(else_branch)
                 }
+            }
+            Expr::Assignment { name, value } => {
+                let v = self.evaluate(value)?;
+                self.environment.assign(name, v.clone())?;
+                Ok(v)
             }
         }
     }

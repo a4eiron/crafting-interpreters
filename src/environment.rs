@@ -17,6 +17,18 @@ impl Environment {
         self.values.insert(name, value);
     }
 
+    pub fn assign(&mut self, name: &Token, value: Value) -> Result<()> {
+        if let Some(variable) = self.values.get_mut(name.lexeme()) {
+            *variable = value;
+            Ok(())
+        } else {
+            Err(RuntimeError {
+                token: name.clone(),
+                message: format!("Undefined variable '{}'", name.lexeme()),
+            })
+        }
+    }
+
     pub fn get(&self, name: &Token) -> Result<&Value> {
         if let Some(value) = self.values.get(name.lexeme()) {
             return Ok(value);

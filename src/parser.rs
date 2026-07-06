@@ -1,35 +1,22 @@
 // TODO: Rc instead of cloning everywhere..(when the time comes)
-use std::fmt;
+use std::fmt::{self};
 
 use crate::token::*;
 
 type Result<T> = std::result::Result<T, ParseError>;
 
 #[derive(Debug)]
-pub enum ParseError {
-    UnexpectedToken { found: Token },
-    ExpectedToken { expected: TokenType, found: Token },
+pub struct ParseError {
+    // token_type: TokenType,
+    line: usize,
+    message: String,
 }
 
 impl std::error::Error for ParseError {}
 
 impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let text = match self {
-            Self::UnexpectedToken { found } => format!(
-                "line: {} | unexpected token: '{}'",
-                found.line(),
-                found.lexeme()
-            ),
-            Self::ExpectedToken { expected, found } => format!(
-                "line: {} | expected '{}' found {}",
-                found.line(),
-                expected,
-                found.lexeme()
-            ),
-        };
-
-        write!(f, "{}", text)
+        write!(f, "line: {} | {}", self.line, self.message)
     }
 }
 
@@ -40,6 +27,10 @@ pub enum Expr {
     Unary {
         operator: Token,
         right: Box<Expr>,
+    },
+    Assignment {
+        name: Token,
+        value: Box<Expr>,
     },
     Binary {
         left: Box<Expr>,
@@ -75,13 +66,17 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse(&mut self) -> Result<Vec<Stmt>> {
-        // TODO/CHECK: null on syntax error
         let mut stmts: Vec<Stmt> = Vec::new();
-        while !self.at_end() {
-            let stmt = self.declaration()?;
-            stmts.push(stmt);
-        }
 
+        while !self.at_end() {
+            match self.declaration() {
+                Ok(stmt) => stmts.push(stmt),
+                Err(err) => {
+                    eprintln!("{}", err);
+                    self.synchronize();
+                }
+            }
+        }
         Ok(stmts)
     }
 
@@ -128,7 +123,34 @@ impl<'a> Parser<'a> {
     }
 
     fn expression(&mut self) -> Result<Expr> {
-        self.conditional()
+        self.assignment()
+    }
+
+    fn assignment(&mut self) -> Result<Expr> {
+        let expr = self.conditional()?;
+
+        if self.match_token(&[TokenType::Equal]) {
+            let equals = self.previous();
+            let value = self.assignment()?;
+
+            match expr {
+                Expr::Var(token) => {
+                    return Ok(Expr::Assignment {
+                        name: token,
+                        value: Box::new(value),
+                    });
+                }
+                _ => {
+                    return Err(ParseError {
+                        // token_type: equals.token_type(),
+                        line: equals.line(),
+                        message: format!("invalid assigment target"),
+                    });
+                }
+            }
+        }
+
+        Ok(expr)
     }
 
     fn conditional(&mut self) -> Result<Expr> {
@@ -259,8 +281,10 @@ impl<'a> Parser<'a> {
             return Ok(Expr::Grouping(Box::new(expr)));
         }
 
-        return Err(ParseError::UnexpectedToken {
-            found: self.peek().clone(),
+        return Err(ParseError {
+            // token_type: self.peek().token_type(),
+            line: self.peek().line(),
+            message: format!("unexpected token {}", self.peek().token_type()),
         });
     }
 
@@ -269,9 +293,10 @@ impl<'a> Parser<'a> {
             return Ok(self.advance());
         }
 
-        return Err(ParseError::ExpectedToken {
-            expected: token_type,
-            found: self.peek().clone(),
+        return Err(ParseError {
+            // token_type,
+            line: self.peek().line(),
+            message: format!("expected {} found {}", token_type, self.peek().token_type()),
         });
     }
 
