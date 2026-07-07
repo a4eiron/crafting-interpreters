@@ -59,6 +59,10 @@ pub enum Stmt {
         then_branch: Box<Stmt>,
         else_branch: Option<Box<Stmt>>,
     },
+    While {
+        condition: Expr,
+        body: Box<Stmt>,
+    },
 }
 
 pub struct Parser<'a> {
@@ -102,11 +106,70 @@ impl<'a> Parser<'a> {
             self.if_stmt()
         } else if self.match_token(&[TokenType::Print]) {
             self.print_stmt()
+        } else if self.match_token(&[TokenType::For]) {
+            self.for_stmt()
+        } else if self.match_token(&[TokenType::While]) {
+            self.while_stmt()
         } else if self.match_token(&[TokenType::LBrace]) {
             Ok(Stmt::Block(self.block()?))
         } else {
             self.expr_stmt()
         }
+    }
+
+    fn for_stmt(&mut self) -> Result<Stmt> {
+        self.consume(TokenType::LParen)?;
+
+        let initializer = if self.match_token(&[TokenType::Semicolon]) {
+            None
+        } else if self.match_token(&[TokenType::Var]) {
+            Some(self.var_declaration()?)
+        } else {
+            Some(self.expr_stmt()?)
+        };
+
+        let mut condition: Option<Expr> = None;
+        if !self.check(TokenType::Semicolon) {
+            condition = Some(self.expression()?);
+        }
+        self.consume(TokenType::Semicolon)?;
+
+        let mut increment: Option<Expr> = None;
+        if !self.check(TokenType::RParen) {
+            increment = Some(self.expression()?);
+        }
+        self.consume(TokenType::RParen)?;
+
+        let mut body = self.statement()?;
+
+        if let Some(inc) = increment {
+            body = Stmt::Block(vec![body, Stmt::Expression(inc)]);
+        }
+
+        let condition = condition.unwrap_or(Expr::Literal(Literal::True));
+
+        body = Stmt::While {
+            condition: condition,
+            body: Box::new(body),
+        };
+
+        if let Some(init) = initializer {
+            body = Stmt::Block(vec![init, body]);
+        }
+
+        Ok(body)
+    }
+
+    fn while_stmt(&mut self) -> Result<Stmt> {
+        self.consume(TokenType::LParen)?;
+        let condition = self.expression()?;
+        self.consume(TokenType::RParen)?;
+        let body = self.statement()?;
+
+        Ok(Stmt::While {
+            condition,
+            body: Box::new(body),
+        })
     }
 
     fn if_stmt(&mut self) -> Result<Stmt> {

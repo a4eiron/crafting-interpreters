@@ -19,10 +19,10 @@ print c;
 
 var a2 = 1;
 {
-  a2 = a + 2;
-  var b = 10;
-  print a2;
-  print b;
+	a2 = a + 2;
+	var b = 10;
+	print a2;
+	print b;
 }
 print a2;
 
@@ -41,3 +41,21 @@ if (cond = true){
 var res = cond ? "TRUE" : "FALSE";
 print "res:" + res;
 
+
+
+while (false){
+	print "true";
+}
+
+for (var i = 0; i < 10; i = i+1){
+	print i;
+}
+
+var j = 0;
+for (;j < 5; j = j+1){
+	print j;
+}
+
+// for (;;){
+//	print "inf";
+// }
