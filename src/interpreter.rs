@@ -85,6 +85,18 @@ impl Interpreter {
                     Environment::new_with_env(Rc::clone(&self.environment)),
                 )?;
             }
+            Stmt::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
+                let value = self.evaluate(condition)?;
+                if is_truthy(&value) {
+                    self.execute(then_branch)?;
+                } else if let Some(stmt) = else_branch {
+                    self.execute(stmt)?
+                }
+            }
         }
         Ok(())
     }

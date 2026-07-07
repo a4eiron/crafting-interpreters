@@ -50,7 +50,15 @@ pub enum Stmt {
     Print(Expr),
     Expression(Expr),
     Block(Vec<Stmt>),
-    Var { name: Token, initializer: Expr },
+    Var {
+        name: Token,
+        initializer: Expr,
+    },
+    If {
+        condition: Expr,
+        then_branch: Box<Stmt>,
+        else_branch: Option<Box<Stmt>>,
+    },
 }
 
 pub struct Parser<'a> {
@@ -90,13 +98,35 @@ impl<'a> Parser<'a> {
     }
 
     fn statement(&mut self) -> Result<Stmt> {
-        if self.match_token(&[TokenType::Print]) {
+        if self.match_token(&[TokenType::If]) {
+            self.if_stmt()
+        } else if self.match_token(&[TokenType::Print]) {
             self.print_stmt()
         } else if self.match_token(&[TokenType::LBrace]) {
             Ok(Stmt::Block(self.block()?))
         } else {
             self.expr_stmt()
         }
+    }
+
+    fn if_stmt(&mut self) -> Result<Stmt> {
+        self.consume(TokenType::LParen)?;
+        let condition = self.expression()?;
+        self.consume(TokenType::RParen)?;
+
+        let then_branch = self.statement()?;
+
+        let else_branch = if self.match_token(&[TokenType::Else]) {
+            Some(Box::new(self.statement()?))
+        } else {
+            None
+        };
+
+        Ok(Stmt::If {
+            condition,
+            then_branch: Box::new(then_branch),
+            else_branch: else_branch,
+        })
     }
 
     fn print_stmt(&mut self) -> Result<Stmt> {

@@ -25,3 +25,19 @@ var a2 = 1;
   print b;
 }
 print a2;
+
+var cond = false == true;
+
+if (cond) {
+	print "TRUE";
+} else {
+	print "FALSE";
+}
+
+if (cond = true){
+	print "no else bro";
+}
+
+var res = cond ? "TRUE" : "FALSE";
+print "res:" + res;
+
