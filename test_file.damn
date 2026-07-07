@@ -42,7 +42,6 @@ var res = cond ? "TRUE" : "FALSE";
 print "res:" + res;
 
 
-
 while (false){
 	print "true";
 }
@@ -66,5 +65,11 @@ if (false or false) {
 	print "and false";
 }
 
-print "hi" or 2; // "hi".
-print nil or "yes"; // "yes".
+print "hi" or 2;
+print nil or "yes";
+
+func sayHi(first, last) {
+  print "Hi, " + first + " " + last + "!";
+}
+
+sayHi("Dear", "Reader");

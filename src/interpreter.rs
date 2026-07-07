@@ -1,9 +1,10 @@
 use crate::environment::Environment;
-use crate::parser::{Expr, Stmt};
+use crate::parser::{Expr, ParseError, ParseResult, Stmt};
 use crate::token::{Literal, Token, TokenType};
 
 use std::{cell::RefCell, fmt, rc::Rc};
 
+///////////////////////////////////////////////////////////////////////////////////////
 pub type Result<T> = std::result::Result<T, RuntimeError>;
 
 #[derive(Debug)]
@@ -20,12 +21,14 @@ impl fmt::Display for RuntimeError {
     }
 }
 
+///////////////////////////////////////////////////////////////////////////////////////
 #[derive(Debug, Clone)]
 pub enum Value {
     Number(f64),
     String(String),
     Bool(bool),
     Nil,
+    Callable(Rc<dyn Callable>),
 }
 
 impl fmt::Display for Value {
@@ -35,18 +38,105 @@ impl fmt::Display for Value {
             Self::String(s) => write!(f, "{}", s),
             Self::Nil => write!(f, "<nil>"),
             Self::Bool(b) => write!(f, "{}", b),
+            Self::Callable(func) => write!(f, "{:?}", func),
         }
     }
 }
 
+/////////////////////////////////////////////////////////////////////////////////////
+pub trait Callable {
+    fn call(&self, interpreter: &mut Interpreter, args: Vec<Value>) -> Result<Value>;
+    fn arity(&self) -> usize;
+}
+
+impl fmt::Debug for dyn Callable {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "<func>")
+    }
+}
+////////////////////////////////////////////////////////////////////////////////////
+pub struct DamnFunc {
+    declaration: Stmt,
+}
+
+impl DamnFunc {
+    fn new(declaration: Stmt) -> ParseResult<Self> {
+        match declaration {
+            Stmt::Func { name, args, body } => Ok(Self {
+                declaration: Stmt::Func { name, args, body },
+            }),
+            _ => Err(ParseError::new(0, "")),
+        }
+    }
+}
+
+impl Callable for DamnFunc {
+    fn arity(&self) -> usize {
+        if let Stmt::Func { name, args, body } = &self.declaration {
+            args.len()
+        } else {
+            0
+        }
+    }
+    fn call(&self, interpreter: &mut Interpreter, args: Vec<Value>) -> Result<Value> {
+        if let Stmt::Func {
+            name,
+            args: params,
+            body,
+        } = &self.declaration
+        {
+            let mut env = Environment::new_with_env(Rc::clone(&interpreter.environment));
+            for (token, value) in params.iter().zip(args.into_iter()) {
+                env.define(token, value)?;
+            }
+            interpreter.execute_block(body, env)?;
+        }
+        Ok(Value::Nil)
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////
 pub struct Interpreter {
+    globals: Rc<RefCell<Environment>>,
     environment: Rc<RefCell<Environment>>,
 }
 
 impl Interpreter {
     pub fn new() -> Self {
+        let global_env = Environment::new();
+
+        struct Clock;
+
+        impl Callable for Clock {
+            fn arity(&self) -> usize {
+                0
+            }
+            fn call(&self, _interpreter: &mut Interpreter, _args: Vec<Value>) -> Result<Value> {
+                use std::time::{SystemTime, UNIX_EPOCH};
+                let now = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs_f64();
+                Ok(Value::Number(now))
+            }
+        }
+
+        global_env
+            .borrow_mut()
+            .define(
+                &Token::new(
+                    TokenType::Identifier,
+                    0,
+                    String::from("clock"),
+                    Some(Literal::Nil),
+                ),
+                Value::Callable(Rc::new(Clock)),
+            )
+            .unwrap();
+
         Self {
-            environment: Environment::new(),
+            globals: Rc::clone(&global_env),
+            environment: Rc::clone(&global_env),
         }
     }
 
@@ -104,6 +194,17 @@ impl Interpreter {
                     value = self.evaluate(condition)?;
                 }
             }
+            Stmt::Func { name, args, body } => {
+                let func = DamnFunc::new(Stmt::Func {
+                    name: name.clone(),
+                    args: args.clone(),
+                    body: body.clone(),
+                })
+                .unwrap();
+                self.environment
+                    .borrow_mut()
+                    .define(name, Value::Callable(Rc::new(func)))?;
+            }
         }
         Ok(())
     }
@@ -160,6 +261,38 @@ impl Interpreter {
                 let v = self.evaluate(value)?;
                 self.environment.borrow_mut().assign(name, v.clone())?;
                 Ok(v)
+            }
+            Expr::Call {
+                callee,
+                paren,
+                args,
+            } => {
+                let callee = self.evaluate(callee)?;
+                let mut arguments = Vec::new();
+
+                for arg in args {
+                    arguments.push(self.evaluate(arg)?);
+                }
+
+                match callee {
+                    Value::Callable(func) => {
+                        if args.len() != func.arity() {
+                            return Err(RuntimeError {
+                                token: paren.clone(),
+                                message: format!(
+                                    "expected {} arguments, got  {}",
+                                    func.arity(),
+                                    args.len()
+                                ),
+                            });
+                        }
+                        func.call(self, arguments)
+                    }
+                    _ => Err(RuntimeError {
+                        token: paren.clone(),
+                        message: format!("can call only functions"),
+                    }),
+                }
             }
         }
     }
@@ -241,5 +374,6 @@ fn is_truthy(value: &Value) -> bool {
         Value::Bool(b) => *b,
         Value::String(s) => !s.is_empty(),
         Value::Number(n) => *n != 0.0,
+        _ => false,
     }
 }

@@ -112,6 +112,7 @@ impl<'a> Scanner<'a> {
             "else" => TokenType::Else,
             "while" => TokenType::While,
             "for" => TokenType::For,
+            "break" => TokenType::Break,
             "return" => TokenType::Return,
             "and" => TokenType::And,
             "or" => TokenType::Or,
@@ -122,6 +123,7 @@ impl<'a> Scanner<'a> {
             "class" => TokenType::Class,
             "this" => TokenType::This,
             "super" => TokenType::Super,
+            "func" => TokenType::Func,
             _ => TokenType::Identifier,
         };
 

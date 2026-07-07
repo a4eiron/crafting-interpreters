@@ -38,6 +38,8 @@ pub enum TokenType {
     Class,
     This,
     Super,
+    Break,
+    Func,
 
     Identifier,
     String,
@@ -134,6 +136,8 @@ impl fmt::Display for TokenType {
             TokenType::Class => "class",
             TokenType::This => "this",
             TokenType::Super => "super",
+            TokenType::Break => "break",
+            TokenType::Func => "func",
 
             TokenType::Identifier => "identifier",
             TokenType::String => "string",

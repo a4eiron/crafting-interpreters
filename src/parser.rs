@@ -3,7 +3,7 @@ use std::fmt::{self};
 
 use crate::token::*;
 
-type Result<T> = std::result::Result<T, ParseError>;
+pub type ParseResult<T> = std::result::Result<T, ParseError>;
 
 #[derive(Debug)]
 pub struct ParseError {
@@ -14,13 +14,22 @@ pub struct ParseError {
 
 impl std::error::Error for ParseError {}
 
+impl ParseError {
+    pub fn new(line: usize, message: &str) -> Self {
+        Self {
+            line,
+            message: message.to_string(),
+        }
+    }
+}
+
 impl fmt::Display for ParseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "line: {} | {}", self.line, self.message)
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Expr {
     Literal(Literal),
     Grouping(Box<Expr>),
@@ -48,9 +57,14 @@ pub enum Expr {
         operator: Token,
     },
     Var(Token),
+    Call {
+        callee: Box<Expr>,
+        paren: Token,
+        args: Vec<Expr>,
+    },
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Stmt {
     Print(Expr),
     Expression(Expr),
@@ -68,6 +82,11 @@ pub enum Stmt {
         condition: Expr,
         body: Box<Stmt>,
     },
+    Func {
+        name: Token,
+        args: Vec<Token>,
+        body: Vec<Stmt>,
+    },
 }
 
 pub struct Parser<'a> {
@@ -83,7 +102,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse(&mut self) -> Result<Vec<Stmt>> {
+    pub fn parse(&mut self) -> ParseResult<Vec<Stmt>> {
         let mut stmts: Vec<Stmt> = Vec::new();
 
         while !self.at_end() {
@@ -98,15 +117,17 @@ impl<'a> Parser<'a> {
         Ok(stmts)
     }
 
-    fn declaration(&mut self) -> Result<Stmt> {
-        if self.match_token(&[TokenType::Var]) {
+    fn declaration(&mut self) -> ParseResult<Stmt> {
+        if self.match_token(&[TokenType::Func]) {
+            self.function("function")
+        } else if self.match_token(&[TokenType::Var]) {
             self.var_declaration()
         } else {
             self.statement()
         }
     }
 
-    fn statement(&mut self) -> Result<Stmt> {
+    fn statement(&mut self) -> ParseResult<Stmt> {
         if self.match_token(&[TokenType::If]) {
             self.if_stmt()
         } else if self.match_token(&[TokenType::Print]) {
@@ -122,7 +143,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn for_stmt(&mut self) -> Result<Stmt> {
+    fn for_stmt(&mut self) -> ParseResult<Stmt> {
         self.consume(TokenType::LParen)?;
 
         let initializer = if self.match_token(&[TokenType::Semicolon]) {
@@ -165,7 +186,7 @@ impl<'a> Parser<'a> {
         Ok(body)
     }
 
-    fn while_stmt(&mut self) -> Result<Stmt> {
+    fn while_stmt(&mut self) -> ParseResult<Stmt> {
         self.consume(TokenType::LParen)?;
         let condition = self.expression()?;
         self.consume(TokenType::RParen)?;
@@ -177,7 +198,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn if_stmt(&mut self) -> Result<Stmt> {
+    fn if_stmt(&mut self) -> ParseResult<Stmt> {
         self.consume(TokenType::LParen)?;
         let condition = self.expression()?;
         self.consume(TokenType::RParen)?;
@@ -197,19 +218,42 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn print_stmt(&mut self) -> Result<Stmt> {
+    fn print_stmt(&mut self) -> ParseResult<Stmt> {
         let expr = self.expression()?;
         self.consume(TokenType::Semicolon)?;
         Ok(Stmt::Print(expr))
     }
 
-    fn expr_stmt(&mut self) -> Result<Stmt> {
+    fn expr_stmt(&mut self) -> ParseResult<Stmt> {
         let expr = self.expression()?;
         self.consume(TokenType::Semicolon)?;
         Ok(Stmt::Expression(expr))
     }
 
-    fn var_declaration(&mut self) -> Result<Stmt> {
+    fn function(&mut self, identiier: &str) -> ParseResult<Stmt> {
+        let name = self.consume(TokenType::Identifier)?;
+        self.consume(TokenType::LParen)?;
+
+        let mut args = Vec::new();
+
+        if !self.check(TokenType::RParen) {
+            let mut t = true;
+            while t {
+                args.push(self.consume(TokenType::Identifier)?);
+                if !self.match_token(&[TokenType::Comma]) {
+                    t = false;
+                }
+            }
+        }
+
+        self.consume(TokenType::RParen)?;
+        self.consume(TokenType::LBrace)?;
+        let body = self.block()?;
+
+        Ok(Stmt::Func { name, args, body })
+    }
+
+    fn var_declaration(&mut self) -> ParseResult<Stmt> {
         let identifier = self.consume(TokenType::Identifier)?;
         let mut initializer = Expr::Literal(Literal::Nil);
 
@@ -223,7 +267,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn block(&mut self) -> Result<Vec<Stmt>> {
+    fn block(&mut self) -> ParseResult<Vec<Stmt>> {
         let mut stmts = Vec::new();
 
         while !self.check(TokenType::RBrace) && !self.at_end() {
@@ -235,11 +279,11 @@ impl<'a> Parser<'a> {
         Ok(stmts)
     }
 
-    fn expression(&mut self) -> Result<Expr> {
+    fn expression(&mut self) -> ParseResult<Expr> {
         self.assignment()
     }
 
-    fn or(&mut self) -> Result<Expr> {
+    fn or(&mut self) -> ParseResult<Expr> {
         let mut expr = self.and()?;
         while self.match_token(&[TokenType::Or]) {
             let operator = self.previous();
@@ -253,7 +297,7 @@ impl<'a> Parser<'a> {
         Ok(expr)
     }
 
-    fn and(&mut self) -> Result<Expr> {
+    fn and(&mut self) -> ParseResult<Expr> {
         let mut expr = self.conditional()?;
 
         while self.match_token(&[TokenType::And]) {
@@ -268,7 +312,7 @@ impl<'a> Parser<'a> {
         Ok(expr)
     }
 
-    fn assignment(&mut self) -> Result<Expr> {
+    fn assignment(&mut self) -> ParseResult<Expr> {
         let expr = self.or()?;
         // let expr = self.conditional()?;
 
@@ -296,7 +340,7 @@ impl<'a> Parser<'a> {
         Ok(expr)
     }
 
-    fn conditional(&mut self) -> Result<Expr> {
+    fn conditional(&mut self) -> ParseResult<Expr> {
         let mut expr = self.equality()?;
 
         while self.match_token(&[TokenType::Question]) {
@@ -313,7 +357,7 @@ impl<'a> Parser<'a> {
         Ok(expr)
     }
 
-    fn equality(&mut self) -> Result<Expr> {
+    fn equality(&mut self) -> ParseResult<Expr> {
         let mut expr = self.comparison()?;
 
         while self.match_token(&[TokenType::BangEqual, TokenType::EqualEqual]) {
@@ -329,7 +373,7 @@ impl<'a> Parser<'a> {
         Ok(expr)
     }
 
-    fn comparison(&mut self) -> Result<Expr> {
+    fn comparison(&mut self) -> ParseResult<Expr> {
         let mut expr = self.term()?;
 
         while self.match_token(&[
@@ -351,7 +395,7 @@ impl<'a> Parser<'a> {
         Ok(expr)
     }
 
-    fn term(&mut self) -> Result<Expr> {
+    fn term(&mut self) -> ParseResult<Expr> {
         let mut expr = self.factor()?;
 
         while self.match_token(&[TokenType::Minus, TokenType::Plus]) {
@@ -368,7 +412,7 @@ impl<'a> Parser<'a> {
         Ok(expr)
     }
 
-    fn factor(&mut self) -> Result<Expr> {
+    fn factor(&mut self) -> ParseResult<Expr> {
         let mut expr = self.unary()?;
 
         while self.match_token(&[TokenType::Slash, TokenType::Star]) {
@@ -384,7 +428,7 @@ impl<'a> Parser<'a> {
         Ok(expr)
     }
 
-    fn unary(&mut self) -> Result<Expr> {
+    fn unary(&mut self) -> ParseResult<Expr> {
         if self.match_token(&[TokenType::Bang, TokenType::Minus]) {
             let operator = self.previous();
             let right = self.unary()?;
@@ -393,10 +437,52 @@ impl<'a> Parser<'a> {
                 right: Box::new(right),
             });
         }
-        self.primary()
+        self.call()
     }
 
-    fn primary(&mut self) -> Result<Expr> {
+    fn call(&mut self) -> ParseResult<Expr> {
+        let mut expr = self.primary()?;
+
+        loop {
+            if self.match_token(&[TokenType::LParen]) {
+                expr = self.finish_call(expr)?;
+            } else {
+                break;
+            }
+        }
+
+        Ok(expr)
+    }
+
+    fn finish_call(&mut self, expr: Expr) -> ParseResult<Expr> {
+        let mut args = vec![];
+
+        let mut t = true;
+        while t {
+            // i don't wanna have a limit, skipping..
+            // if args.len() >= 255 {
+            //     return Err(ParseError {
+            //         line: self.peek().line(),
+            //         message: format!("cannot have more than 255 arguments"),
+            //     });
+            // }
+
+            args.push(self.expression()?);
+            if !self.match_token(&[TokenType::Comma]) {
+                t = false;
+            }
+        }
+
+        let paren = self.consume(TokenType::RParen)?;
+
+        Ok(Expr::Call {
+            callee: Box::new(expr),
+            paren: paren,
+            args,
+        })
+    }
+
+    fn primary(&mut self) -> ParseResult<Expr> {
         if self.match_token(&[TokenType::False]) {
             return Ok(Expr::Literal(Literal::False));
         }
@@ -431,7 +517,7 @@ impl<'a> Parser<'a> {
         });
     }
 
-    fn consume(&mut self, token_type: TokenType) -> Result<Token> {
+    fn consume(&mut self, token_type: TokenType) -> ParseResult<Token> {
         if self.check(token_type) {
             return Ok(self.advance());
         }
