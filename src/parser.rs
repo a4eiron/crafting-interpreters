@@ -42,6 +42,11 @@ pub enum Expr {
         then_branch: Box<Expr>,
         else_branch: Box<Expr>,
     },
+    Logical {
+        left: Box<Expr>,
+        right: Box<Expr>,
+        operator: Token,
+    },
     Var(Token),
 }
 
@@ -234,8 +239,38 @@ impl<'a> Parser<'a> {
         self.assignment()
     }
 
+    fn or(&mut self) -> Result<Expr> {
+        let mut expr = self.and()?;
+        while self.match_token(&[TokenType::Or]) {
+            let operator = self.previous();
+            let right = self.and()?;
+            expr = Expr::Logical {
+                left: Box::new(expr),
+                right: Box::new(right),
+                operator,
+            }
+        }
+        Ok(expr)
+    }
+
+    fn and(&mut self) -> Result<Expr> {
+        let mut expr = self.conditional()?;
+
+        while self.match_token(&[TokenType::And]) {
+            let operator = self.previous();
+            let right = self.conditional()?;
+            expr = Expr::Logical {
+                left: Box::new(expr),
+                right: Box::new(right),
+                operator,
+            }
+        }
+        Ok(expr)
+    }
+
     fn assignment(&mut self) -> Result<Expr> {
-        let expr = self.conditional()?;
+        let expr = self.or()?;
+        // let expr = self.conditional()?;
 
         if self.match_token(&[TokenType::Equal]) {
             let equals = self.previous();

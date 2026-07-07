@@ -59,3 +59,12 @@ for (;j < 5; j = j+1){
 // for (;;){
 //	print "inf";
 // }
+
+if (false or false) {
+	print "and true";
+} else {
+	print "and false";
+}
+
+print "hi" or 2; // "hi".
+print nil or "yes"; // "yes".

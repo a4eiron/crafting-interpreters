@@ -126,6 +126,24 @@ impl Interpreter {
                 let v_right = self.evaluate(right)?;
                 binary(operator, v_left, v_right)
             }
+            Expr::Logical {
+                left,
+                right,
+                operator,
+            } => {
+                let v_left = self.evaluate(left)?;
+                if operator.token_type() == TokenType::Or {
+                    if is_truthy(&v_left) {
+                        return Ok(v_left);
+                    }
+                } else {
+                    if !is_truthy(&v_left) {
+                        return Ok(v_left);
+                    }
+                }
+
+                self.evaluate(right)
+            }
             Expr::Conditional {
                 condition,
                 then_branch,
