@@ -1,5 +1,5 @@
 use crate::environment::Environment;
-use crate::parser::{Expr, FuncStmt, ParseError, ParseResult, Stmt};
+use crate::parser::{Expr, FuncStmt, Stmt};
 use crate::token::{Literal, Token, TokenType};
 
 use std::{cell::RefCell, fmt, rc::Rc};
@@ -144,7 +144,7 @@ impl fmt::Display for Value {
             Self::String(s) => write!(f, "{}", s),
             Self::Nil => write!(f, "<nil>"),
             Self::Bool(b) => write!(f, "{}", b),
-            Self::Callable(func) => write!(f, "{:?}", func),
+            Self::Callable(func) => write!(f, "<func {}>", func.name()),
         }
     }
 }
@@ -153,44 +153,55 @@ impl fmt::Display for Value {
 pub trait Callable {
     fn call(&self, interpreter: &mut Interpreter, args: Vec<Value>) -> RuntimeResult<Value>;
     fn arity(&self) -> usize;
+    fn name(&self) -> String;
 }
 
 impl fmt::Debug for dyn Callable {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "<func>")
+        write!(f, "<Callable {}>", self.name())
     }
 }
 ////////////////////////////////////////////////////////////////////////////////////
-pub struct DamnFunc {
+pub struct LoxFunction {
     declaration: FuncStmt,
+    closure: Rc<RefCell<Environment>>,
 }
 
-impl DamnFunc {
-    fn new(declaration: Stmt) -> ParseResult<Self> {
-        match declaration {
-            Stmt::Func(stmt) => Ok(Self { declaration: stmt }),
-            _ => Err(ParseError::new(0, "")),
+impl fmt::Debug for LoxFunction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "<func {}>", self.declaration.name.lexeme())
+    }
+}
+
+impl LoxFunction {
+    fn new(declaration: FuncStmt, closure: Rc<RefCell<Environment>>) -> Self {
+        Self {
+            declaration,
+            closure,
         }
     }
 }
 
-impl Callable for DamnFunc {
+impl Callable for LoxFunction {
+    fn name(&self) -> String {
+        self.declaration.name.lexeme().to_string()
+    }
     fn arity(&self) -> usize {
         self.declaration.args.len()
     }
     fn call(&self, interpreter: &mut Interpreter, args: Vec<Value>) -> RuntimeResult<Value> {
-        let mut env = Environment::new_with_env(Rc::clone(&interpreter.environment));
+        let mut env = Environment::new_with_env(Rc::clone(&self.closure));
         for (token, value) in self.declaration.args.iter().zip(args.into_iter()) {
             env.define(token, value)?;
         }
         let value = match interpreter.execute_block(&self.declaration.body, env) {
             Err(e) => match e {
                 ControlFlow::Return(v) => v,
-                _ => Value::Nil,
+                ControlFlow::Error(err) => return Err(err),
             },
             Ok(_) => Value::Nil,
         };
-        return Ok(value);
+        Ok(value)
     }
 }
 
@@ -207,6 +218,9 @@ impl Interpreter {
         struct Clock;
 
         impl Callable for Clock {
+            fn name(&self) -> String {
+                String::from("clock")
+            }
             fn arity(&self) -> usize {
                 0
             }
@@ -316,12 +330,7 @@ impl Interpreter {
                 }
             }
             Stmt::Func(stmt) => {
-                let func = DamnFunc::new(Stmt::Func(FuncStmt {
-                    name: stmt.name.clone(),
-                    args: stmt.args.clone(),
-                    body: stmt.body.clone(),
-                }))
-                .unwrap();
+                let func = LoxFunction::new(stmt.clone(), Rc::clone(&self.environment));
                 self.environment
                     .borrow_mut()
                     .define(&stmt.name, Value::Callable(Rc::new(func)))?;

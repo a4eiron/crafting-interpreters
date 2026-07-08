@@ -1,87 +1,28 @@
-print "hello";
-print 10 + 20;
-print 2 * (4-10);
-print true == true;
-print false == true;
-print nil == false;
-print "" == false;
-print 0 == true;
+func makeCounter() {
+  var i = 0;
+  func count() {
+    i = i + 1;
+    print i;
+  }
 
-var a = 10;
-var b = 20;
-a = 30;
-print a + b;
-print 10 < 20 ? "smaller" : "greater";
-
-var c = 10;
-print c = 20;
-print c;
-
-var a2 = 1;
-{
-	a2 = a + 2;
-	var b = 10;
-	print a2;
-	print b;
-}
-print a2;
-
-var cond = false == true;
-
-if (cond) {
-	print "TRUE";
-} else {
-	print "FALSE";
+  return count;
 }
 
-if (cond = true){
-	print "no else bro";
+var counter = makeCounter();
+counter(); // "1".
+counter(); // "2".
+counter(); // "3".
+
+func add(a, b) {
+	return a + b;
 }
 
-var res = cond ? "TRUE" : "FALSE";
-print "res:" + res;
+print add(1, 110);
 
+print makeCounter;
+print clock;
+print counter;
 
-while (false){
-	print "true";
-}
+print clock();
+print clock();
 
-for (var i = 0; i < 10; i = i+1){
-	print i;
-}
-
-var j = 0;
-for (;j < 5; j = j+1){
-	print j;
-}
-
-// for (;;){
-//	print "inf";
-// }
-
-if (false or false) {
-	print "and true";
-} else {
-	print "and false";
-}
-
-print "hi" or 2;
-print nil or "yes";
-
-func sayHi(first, last) {
-  print "Hi, " + first + " " + last + "!";
-}
-
-sayHi("Dear", "Reader");
-
-func fib(n) {
-  if (n <= 1) return n;
-  return fib(n - 2) + fib(n - 1);
-}
-
-for (var i = 0; i < 20; i = i + 1) {
-  print fib(i);
-}
-
-print "a" >= "A";
-print "b" < "a";

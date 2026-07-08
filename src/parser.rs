@@ -513,19 +513,20 @@ impl<'a> Parser<'a> {
     fn finish_call(&mut self, expr: Expr) -> ParseResult<Expr> {
         let mut args = vec![];
 
-        let mut t = true;
-        while t {
-            // i don't wanna have a limit, skipping..
-            // if args.len() >= 255 {
-            //     return Err(ParseError {
-            //         line: self.peek().line(),
-            //         message: format!("cannot have more than 255 arguments"),
-            //     });
-            // }
-
-            args.push(self.expression()?);
-            if !self.match_token(&[TokenType::Comma]) {
-                t = false;
+        if !self.check(TokenType::RParen) {
+            let mut t = true;
+            while t {
+                // i don't wanna have a limit, skipping..
+                // if args.len() >= 255 {
+                //     return Err(ParseError {
+                //         line: self.peek().line(),
+                //         message: format!("cannot have more than 255 arguments"),
+                //     });
+                // }
+                args.push(self.expression()?);
+                if !self.match_token(&[TokenType::Comma]) {
+                    t = false;
+                }
             }
         }
 
