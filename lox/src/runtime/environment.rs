@@ -1,7 +1,6 @@
+use crate::lexer::Token;
+use crate::runtime::{RuntimeError, RuntimeResult, Value};
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
-
-use crate::interpreter::{RuntimeError, RuntimeResult, Value};
-use crate::token::Token;
 
 #[derive(Debug, Clone)]
 pub struct Environment {

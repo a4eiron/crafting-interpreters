@@ -1,10 +1,9 @@
-use crate::environment::Environment;
-use crate::parser::{Expr, FuncStmt, Stmt};
-use crate::token::{Literal, Token, TokenType};
+use crate::lexer::*;
+use crate::parser::*;
+use crate::runtime::*;
 
-use std::{cell::RefCell, fmt, rc::Rc};
+use std::{cell::RefCell, rc::Rc};
 
-///////////////////////////////////////////////////////////////////////////////////////
 pub type RuntimeResult<T> = std::result::Result<T, RuntimeError>;
 
 pub enum ControlFlow {
@@ -12,200 +11,6 @@ pub enum ControlFlow {
     Return(Value),
 }
 
-impl From<RuntimeError> for ControlFlow {
-    fn from(err: RuntimeError) -> Self {
-        ControlFlow::Error(err)
-    }
-}
-
-#[derive(Debug)]
-pub struct RuntimeError {
-    pub token: Option<Token>,
-    pub message: String,
-}
-
-impl std::error::Error for RuntimeError {}
-
-impl fmt::Display for RuntimeError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match &self.token {
-            Some(token) => write!(f, "line: {} | {}", token.line(), self.message),
-            None => write!(f, "{}", self.message),
-        }
-    }
-}
-
-impl RuntimeError {
-    fn new(msg: &str) -> Self {
-        Self {
-            token: None,
-            message: msg.to_string(),
-        }
-    }
-}
-
-///////////////////////////////////////////////////////////////////////////////////////
-#[derive(Debug, Clone)]
-pub enum Value {
-    Number(f64),
-    String(String),
-    Bool(bool),
-    Nil,
-    Callable(Rc<dyn Callable>),
-}
-
-impl Value {
-    fn add(self, rhs: &Value) -> RuntimeResult<Value> {
-        match (self, rhs) {
-            (Value::Number(a), Value::Number(b)) => Ok(Value::Number(a + b)),
-            (Value::String(a), Value::String(b)) => Ok(Value::String(a + &b)),
-            (_, _) => Err(RuntimeError::new("operands must be numbers or strings")),
-        }
-    }
-
-    fn sub(self, rhs: &Value) -> RuntimeResult<Value> {
-        match (self, rhs) {
-            (Value::Number(a), Value::Number(b)) => Ok(Value::Number(a - b)),
-            (_, _) => Err(RuntimeError::new("operands must be numbers")),
-        }
-    }
-
-    fn mul(self, rhs: &Value) -> RuntimeResult<Value> {
-        match (self, rhs) {
-            (Value::Number(a), Value::Number(b)) => Ok(Value::Number(a * b)),
-            (_, _) => Err(RuntimeError::new("operands must be numbers")),
-        }
-    }
-
-    fn divide(self, rhs: &Value) -> RuntimeResult<Value> {
-        match (self, rhs) {
-            (Value::Number(a), Value::Number(b)) => Ok(Value::Number(a / b)),
-            (_, _) => Err(RuntimeError::new("operands must be numbers")),
-        }
-    }
-
-    fn equal(&self, rhs: &Value) -> RuntimeResult<Value> {
-        match (self, rhs) {
-            (Value::Number(a), Value::Number(b)) => Ok(Value::Bool(a == b)),
-            (Value::String(a), Value::String(b)) => Ok(Value::Bool(a == b)),
-            (ref a, Value::Bool(b)) => Ok(Value::Bool(is_truthy(a) == *b)),
-            (Value::Bool(a), ref b) => Ok(Value::Bool(*a == is_truthy(b))),
-            (_, _) => Err(RuntimeError::new("incompatable")),
-        }
-    }
-
-    fn not_equal(&self, rhs: &Value) -> RuntimeResult<Value> {
-        match (self, rhs) {
-            (Value::Number(a), Value::Number(b)) => Ok(Value::Bool(a != b)),
-            (Value::String(a), Value::String(b)) => Ok(Value::Bool(a != b)),
-            (ref a, Value::Bool(b)) => Ok(Value::Bool(is_truthy(a) != *b)),
-            (Value::Bool(a), ref b) => Ok(Value::Bool(*a != is_truthy(b))),
-            (_, _) => Err(RuntimeError::new("incompatable")),
-        }
-    }
-
-    fn greater(&self, rhs: &Value) -> RuntimeResult<Value> {
-        match (self, rhs) {
-            (Value::Number(a), Value::Number(b)) => Ok(Value::Bool(a > b)),
-            (Value::String(a), Value::String(b)) => Ok(Value::Bool(a > b)),
-            (_, _) => Err(RuntimeError::new("incompatable")),
-        }
-    }
-
-    fn greater_equal(&self, rhs: &Value) -> RuntimeResult<Value> {
-        match (self, rhs) {
-            (Value::Number(a), Value::Number(b)) => Ok(Value::Bool(a >= b)),
-            (Value::String(a), Value::String(b)) => Ok(Value::Bool(a >= b)),
-            (_, _) => Err(RuntimeError::new("incompatable")),
-        }
-    }
-
-    fn lesser(&self, rhs: &Value) -> RuntimeResult<Value> {
-        match (self, rhs) {
-            (Value::Number(a), Value::Number(b)) => Ok(Value::Bool(a < b)),
-            (Value::String(a), Value::String(b)) => Ok(Value::Bool(a < b)),
-            (_, _) => Err(RuntimeError::new("incompatable")),
-        }
-    }
-
-    fn lesser_equal(&self, rhs: &Value) -> RuntimeResult<Value> {
-        match (self, rhs) {
-            (Value::Number(a), Value::Number(b)) => Ok(Value::Bool(a <= b)),
-            (Value::String(a), Value::String(b)) => Ok(Value::Bool(a <= b)),
-            (_, _) => Err(RuntimeError::new("incompatable")),
-        }
-    }
-}
-
-impl fmt::Display for Value {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Number(n) => write!(f, "{}", n),
-            Self::String(s) => write!(f, "{}", s),
-            Self::Nil => write!(f, "<nil>"),
-            Self::Bool(b) => write!(f, "{}", b),
-            Self::Callable(func) => write!(f, "<func {}>", func.name()),
-        }
-    }
-}
-
-/////////////////////////////////////////////////////////////////////////////////////
-pub trait Callable {
-    fn call(&self, interpreter: &mut Interpreter, args: Vec<Value>) -> RuntimeResult<Value>;
-    fn arity(&self) -> usize;
-    fn name(&self) -> String;
-}
-
-impl fmt::Debug for dyn Callable {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "<Callable {}>", self.name())
-    }
-}
-////////////////////////////////////////////////////////////////////////////////////
-pub struct LoxFunction {
-    declaration: FuncStmt,
-    closure: Rc<RefCell<Environment>>,
-}
-
-impl fmt::Debug for LoxFunction {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "<func {}>", self.declaration.name.lexeme())
-    }
-}
-
-impl LoxFunction {
-    fn new(declaration: FuncStmt, closure: Rc<RefCell<Environment>>) -> Self {
-        Self {
-            declaration,
-            closure,
-        }
-    }
-}
-
-impl Callable for LoxFunction {
-    fn name(&self) -> String {
-        self.declaration.name.lexeme().to_string()
-    }
-    fn arity(&self) -> usize {
-        self.declaration.args.len()
-    }
-    fn call(&self, interpreter: &mut Interpreter, args: Vec<Value>) -> RuntimeResult<Value> {
-        let mut env = Environment::new_with_env(Rc::clone(&self.closure));
-        for (token, value) in self.declaration.args.iter().zip(args.into_iter()) {
-            env.define(token, value)?;
-        }
-        let value = match interpreter.execute_block(&self.declaration.body, env) {
-            Err(e) => match e {
-                ControlFlow::Return(v) => v,
-                ControlFlow::Error(err) => return Err(err),
-            },
-            Ok(_) => Value::Nil,
-        };
-        Ok(value)
-    }
-}
-
-////////////////////////////////////////////////////////////////////////////////////
 pub struct Interpreter {
     globals: Rc<RefCell<Environment>>,
     environment: Rc<RefCell<Environment>>,
@@ -279,7 +84,7 @@ impl Interpreter {
         Ok(())
     }
 
-    fn execute_block(
+    pub fn execute_block(
         &mut self,
         stmts: &[Stmt],
         env: Environment,
@@ -471,7 +276,7 @@ fn binary(operator: &Token, left: Value, right: &Value) -> RuntimeResult<Value> 
     })
 }
 
-fn is_truthy(value: &Value) -> bool {
+pub fn is_truthy(value: &Value) -> bool {
     match value {
         Value::Nil => false,
         Value::Bool(b) => *b,

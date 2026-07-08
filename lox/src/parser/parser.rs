@@ -1,8 +1,8 @@
-use std::fmt::{self};
+use std::fmt;
 
-use crate::token::*;
+use crate::lexer::{Literal, Token, TokenType};
+use crate::parser::*;
 
-/////////////////////////////////////////////////////////////////////////////////////////
 pub type ParseResult<T> = std::result::Result<T, ParseError>;
 
 #[derive(Debug)]
@@ -29,106 +29,6 @@ impl fmt::Display for ParseError {
     }
 }
 
-/////////////////////////////////////////////////////////////////////////////////////////
-#[derive(Debug, Clone)]
-pub struct UnaryExpr {
-    pub operator: Token,
-    pub right: Expr,
-}
-
-#[derive(Debug, Clone)]
-pub struct BinaryExpr {
-    pub left: Expr,
-    pub right: Expr,
-    pub operator: Token,
-}
-
-#[derive(Debug, Clone)]
-pub struct AssignmentExpr {
-    pub name: Token,
-    pub value: Expr,
-}
-
-#[derive(Debug, Clone)]
-pub struct ConditionalExpr {
-    pub condition: Expr,
-    pub then_branch: Expr,
-    pub else_branch: Expr,
-}
-
-#[derive(Debug, Clone)]
-pub struct LogicalExpr {
-    pub operator: Token,
-    pub left: Expr,
-    pub right: Expr,
-}
-
-#[derive(Debug, Clone)]
-pub struct Call {
-    pub callee: Expr,
-    pub paren: Token,
-    pub args: Vec<Expr>,
-}
-
-#[derive(Debug, Clone)]
-pub enum Expr {
-    Var(Token),
-    Literal(Literal),
-    Grouping(Box<Expr>),
-    Unary(Box<UnaryExpr>),
-    Binary(Box<BinaryExpr>),
-    Assignment(Box<AssignmentExpr>),
-    Conditional(Box<ConditionalExpr>),
-    Logical(Box<LogicalExpr>),
-    Call(Box<Call>),
-}
-
-/////////////////////////////////////////////////////////////////////////////////////////
-#[derive(Debug, Clone)]
-pub struct VarStmt {
-    pub name: Token,
-    pub initializer: Expr,
-}
-
-#[derive(Debug, Clone)]
-pub struct IfStmt {
-    pub condition: Expr,
-    pub then_branch: Box<Stmt>,
-    pub else_branch: Option<Box<Stmt>>,
-}
-
-#[derive(Debug, Clone)]
-pub struct WhileStmt {
-    pub condition: Expr,
-    pub body: Box<Stmt>,
-}
-
-#[derive(Debug, Clone)]
-pub struct FuncStmt {
-    pub name: Token,
-    pub args: Vec<Token>,
-    pub body: Vec<Stmt>,
-}
-
-#[derive(Debug, Clone)]
-pub struct ReturnStmt {
-    pub keyword: Token,
-    pub value: Expr,
-}
-
-#[derive(Debug, Clone)]
-pub enum Stmt {
-    Print(Expr),
-    If(IfStmt),
-    Var(VarStmt),
-    Func(FuncStmt),
-    Expression(Expr),
-    Block(Vec<Stmt>),
-    While(WhileStmt),
-    Return(ReturnStmt),
-}
-
-/////////////////////////////////////////////////////////////////////////////////////////
 pub struct Parser<'a> {
     tokens: &'a [Token],
     current: usize,

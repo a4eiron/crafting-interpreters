@@ -1,14 +1,8 @@
 use std::{fs, process::exit};
 
-mod environment;
-mod interpreter;
-mod parser;
-mod scanner;
-mod token;
-
-use interpreter::*;
-use parser::*;
-use scanner::*;
+use lox::Interpreter;
+use lox::Parser;
+use lox::Scanner;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();

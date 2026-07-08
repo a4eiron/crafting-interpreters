@@ -3,5 +3,5 @@
 version = 4
 
 [[package]]
-name = "crafting-interpreters"
+name = "lox"
 version = "0.1.0"

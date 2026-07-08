@@ -1,6 +1,5 @@
+use crate::lexer::{Literal, Token, TokenType};
 use std::fmt;
-
-use crate::token::*;
 
 type Result<T> = std::result::Result<T, ScanError>;
 
