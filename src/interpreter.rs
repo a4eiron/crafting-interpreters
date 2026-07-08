@@ -1,11 +1,22 @@
 use crate::environment::Environment;
-use crate::parser::{Expr, ParseError, ParseResult, Stmt};
+use crate::parser::{Expr, FuncStmt, ParseError, ParseResult, Stmt};
 use crate::token::{Literal, Token, TokenType};
 
 use std::{cell::RefCell, fmt, rc::Rc};
 
 ///////////////////////////////////////////////////////////////////////////////////////
-pub type Result<T> = std::result::Result<T, RuntimeError>;
+pub type RuntimeResult<T> = std::result::Result<T, RuntimeError>;
+
+pub enum ControlFlow {
+    Error(RuntimeError),
+    Return(Value),
+}
+
+impl From<RuntimeError> for ControlFlow {
+    fn from(err: RuntimeError) -> Self {
+        ControlFlow::Error(err)
+    }
+}
 
 #[derive(Debug)]
 pub struct RuntimeError {
@@ -45,7 +56,7 @@ impl fmt::Display for Value {
 
 /////////////////////////////////////////////////////////////////////////////////////
 pub trait Callable {
-    fn call(&self, interpreter: &mut Interpreter, args: Vec<Value>) -> Result<Value>;
+    fn call(&self, interpreter: &mut Interpreter, args: Vec<Value>) -> RuntimeResult<Value>;
     fn arity(&self) -> usize;
 }
 
@@ -62,8 +73,8 @@ pub struct DamnFunc {
 impl DamnFunc {
     fn new(declaration: Stmt) -> ParseResult<Self> {
         match declaration {
-            Stmt::Func { name, args, body } => Ok(Self {
-                declaration: Stmt::Func { name, args, body },
+            Stmt::Func(stmt) => Ok(Self {
+                declaration: Stmt::Func(stmt),
             }),
             _ => Err(ParseError::new(0, "")),
         }
@@ -72,24 +83,26 @@ impl DamnFunc {
 
 impl Callable for DamnFunc {
     fn arity(&self) -> usize {
-        if let Stmt::Func { name, args, body } = &self.declaration {
-            args.len()
+        if let Stmt::Func(stmt) = &self.declaration {
+            stmt.args.len()
         } else {
             0
         }
     }
-    fn call(&self, interpreter: &mut Interpreter, args: Vec<Value>) -> Result<Value> {
-        if let Stmt::Func {
-            name,
-            args: params,
-            body,
-        } = &self.declaration
-        {
+    fn call(&self, interpreter: &mut Interpreter, args: Vec<Value>) -> RuntimeResult<Value> {
+        if let Stmt::Func(stmt) = &self.declaration {
             let mut env = Environment::new_with_env(Rc::clone(&interpreter.environment));
-            for (token, value) in params.iter().zip(args.into_iter()) {
+            for (token, value) in stmt.args.iter().zip(args.into_iter()) {
                 env.define(token, value)?;
             }
-            interpreter.execute_block(body, env)?;
+            let value = match interpreter.execute_block(&stmt.body, env) {
+                Err(e) => match e {
+                    ControlFlow::Return(v) => v,
+                    _ => Value::Nil,
+                },
+                Ok(_) => Value::Nil,
+            };
+            return Ok(value);
         }
         Ok(Value::Nil)
     }
@@ -111,7 +124,11 @@ impl Interpreter {
             fn arity(&self) -> usize {
                 0
             }
-            fn call(&self, _interpreter: &mut Interpreter, _args: Vec<Value>) -> Result<Value> {
+            fn call(
+                &self,
+                _interpreter: &mut Interpreter,
+                _args: Vec<Value>,
+            ) -> RuntimeResult<Value> {
                 use std::time::{SystemTime, UNIX_EPOCH};
                 let now = SystemTime::now()
                     .duration_since(UNIX_EPOCH)
@@ -140,27 +157,44 @@ impl Interpreter {
         }
     }
 
-    pub fn interpret(&mut self, stmts: &[Stmt]) -> Result<()> {
+    pub fn interpret(&mut self, stmts: &[Stmt]) -> RuntimeResult<()> {
         for stmt in stmts {
-            self.execute(stmt)?;
+            if let Err(flow) = self.execute(stmt) {
+                match flow {
+                    ControlFlow::Error(e) => return Err(e),
+                    ControlFlow::Return(_) => {
+                        return Err(RuntimeError {
+                            token: Token::new(TokenType::Return, 0, String::from("return"), None),
+                            message: String::from("cannot return from top-level code."),
+                        });
+                    }
+                }
+            }
         }
         Ok(())
     }
 
-    fn execute_block(&mut self, stmts: &[Stmt], env: Environment) -> Result<()> {
+    fn execute_block(
+        &mut self,
+        stmts: &[Stmt],
+        env: Environment,
+    ) -> std::result::Result<(), ControlFlow> {
         let previous = std::mem::replace(&mut self.environment, Rc::new(RefCell::new(env)));
         for stmt in stmts {
-            self.execute(stmt)?;
+            if let Err(e) = self.execute(stmt) {
+                self.environment = previous;
+                return Err(e);
+            }
         }
         self.environment = previous;
         Ok(())
     }
 
-    fn execute(&mut self, stmt: &Stmt) -> Result<()> {
+    fn execute(&mut self, stmt: &Stmt) -> std::result::Result<(), ControlFlow> {
         match stmt {
-            Stmt::Var { name, initializer } => {
-                let value = self.evaluate(initializer)?;
-                self.environment.borrow_mut().define(name, value)?;
+            Stmt::Var(stmt) => {
+                let value = self.evaluate(&stmt.initializer)?;
+                self.environment.borrow_mut().define(&stmt.name, value)?;
             }
             Stmt::Print(expr) => {
                 let value = self.evaluate(expr)?;
@@ -175,65 +209,60 @@ impl Interpreter {
                     Environment::new_with_env(Rc::clone(&self.environment)),
                 )?;
             }
-            Stmt::If {
-                condition,
-                then_branch,
-                else_branch,
-            } => {
-                let value = self.evaluate(condition)?;
+            Stmt::If(stmt) => {
+                let value = self.evaluate(&stmt.condition)?;
                 if is_truthy(&value) {
-                    self.execute(then_branch)?;
-                } else if let Some(stmt) = else_branch {
-                    self.execute(stmt)?
+                    self.execute(&stmt.then_branch)?;
+                } else if let Some(stmt) = &stmt.else_branch {
+                    self.execute(&stmt)?
                 }
             }
-            Stmt::While { condition, body } => {
-                let mut value = self.evaluate(condition)?;
+            Stmt::While(stmt) => {
+                let mut value = self.evaluate(&stmt.condition)?;
                 while is_truthy(&value) {
-                    self.execute(body)?;
-                    value = self.evaluate(condition)?;
+                    self.execute(&stmt.body)?;
+                    value = self.evaluate(&stmt.condition)?;
                 }
             }
-            Stmt::Func { name, args, body } => {
-                let func = DamnFunc::new(Stmt::Func {
-                    name: name.clone(),
-                    args: args.clone(),
-                    body: body.clone(),
-                })
+            Stmt::Func(stmt) => {
+                let func = DamnFunc::new(Stmt::Func(FuncStmt {
+                    name: stmt.name.clone(),
+                    args: stmt.args.clone(),
+                    body: stmt.body.clone(),
+                }))
                 .unwrap();
                 self.environment
                     .borrow_mut()
-                    .define(name, Value::Callable(Rc::new(func)))?;
+                    .define(&stmt.name, Value::Callable(Rc::new(func)))?;
+            }
+            Stmt::Return(stmt) => {
+                let mut v = Value::Nil;
+                if !matches!(&stmt.value, Expr::Literal(Literal::Nil)) {
+                    v = self.evaluate(&stmt.value)?;
+                }
+                return Err(ControlFlow::Return(v));
             }
         }
         Ok(())
     }
 
-    fn evaluate(&mut self, expr: &Expr) -> Result<Value> {
+    fn evaluate(&mut self, expr: &Expr) -> RuntimeResult<Value> {
         match expr {
             Expr::Var(t) => self.environment.borrow().get(t),
             Expr::Grouping(g) => self.evaluate(g),
             Expr::Literal(l) => literal(l),
-            Expr::Unary { operator, right } => {
-                let value = self.evaluate(right)?;
-                unary(operator, value)
+            Expr::Unary(expr) => {
+                let value = self.evaluate(&expr.right)?;
+                unary(&expr.operator, value)
             }
-            Expr::Binary {
-                left,
-                right,
-                operator,
-            } => {
-                let v_left = self.evaluate(left)?;
-                let v_right = self.evaluate(right)?;
-                binary(operator, v_left, v_right)
+            Expr::Binary(expr) => {
+                let v_left = self.evaluate(&expr.left)?;
+                let v_right = self.evaluate(&expr.right)?;
+                binary(&expr.operator, v_left, v_right)
             }
-            Expr::Logical {
-                left,
-                right,
-                operator,
-            } => {
-                let v_left = self.evaluate(left)?;
-                if operator.token_type() == TokenType::Or {
+            Expr::Logical(expr) => {
+                let v_left = self.evaluate(&expr.left)?;
+                if &expr.operator.token_type() == &TokenType::Or {
                     if is_truthy(&v_left) {
                         return Ok(v_left);
                     }
@@ -243,53 +272,47 @@ impl Interpreter {
                     }
                 }
 
-                self.evaluate(right)
+                self.evaluate(&expr.right)
             }
-            Expr::Conditional {
-                condition,
-                then_branch,
-                else_branch,
-            } => {
-                let v_condition = self.evaluate(condition)?;
+            Expr::Conditional(expr) => {
+                let v_condition = self.evaluate(&expr.condition)?;
                 if is_truthy(&v_condition) {
-                    self.evaluate(then_branch)
+                    self.evaluate(&expr.then_branch)
                 } else {
-                    self.evaluate(else_branch)
+                    self.evaluate(&expr.else_branch)
                 }
             }
-            Expr::Assignment { name, value } => {
-                let v = self.evaluate(value)?;
-                self.environment.borrow_mut().assign(name, v.clone())?;
+            Expr::Assignment(expr) => {
+                let v = self.evaluate(&expr.value)?;
+                self.environment
+                    .borrow_mut()
+                    .assign(&expr.name, v.clone())?;
                 Ok(v)
             }
-            Expr::Call {
-                callee,
-                paren,
-                args,
-            } => {
-                let callee = self.evaluate(callee)?;
+            Expr::Call(expr) => {
+                let callee = self.evaluate(&expr.callee)?;
                 let mut arguments = Vec::new();
 
-                for arg in args {
-                    arguments.push(self.evaluate(arg)?);
+                for arg in &expr.args {
+                    arguments.push(self.evaluate(&arg)?);
                 }
 
                 match callee {
                     Value::Callable(func) => {
-                        if args.len() != func.arity() {
+                        if expr.args.len() != func.arity() {
                             return Err(RuntimeError {
-                                token: paren.clone(),
+                                token: expr.paren.clone(),
                                 message: format!(
                                     "expected {} arguments, got  {}",
                                     func.arity(),
-                                    args.len()
+                                    expr.args.len()
                                 ),
                             });
                         }
                         func.call(self, arguments)
                     }
                     _ => Err(RuntimeError {
-                        token: paren.clone(),
+                        token: expr.paren.clone(),
                         message: format!("can call only functions"),
                     }),
                 }
@@ -298,7 +321,7 @@ impl Interpreter {
     }
 }
 
-fn literal(literal: &Literal) -> Result<Value> {
+fn literal(literal: &Literal) -> RuntimeResult<Value> {
     match literal {
         Literal::Number(n) => Ok(Value::Number(*n)),
         Literal::String(s) => Ok(Value::String(s.clone())),
@@ -308,7 +331,7 @@ fn literal(literal: &Literal) -> Result<Value> {
     }
 }
 
-fn unary(operator: &Token, value: Value) -> Result<Value> {
+fn unary(operator: &Token, value: Value) -> RuntimeResult<Value> {
     match operator.token_type() {
         TokenType::Minus => match value {
             Value::Number(n) => Ok(Value::Number(-n)),
@@ -322,7 +345,7 @@ fn unary(operator: &Token, value: Value) -> Result<Value> {
     }
 }
 
-fn binary(operator: &Token, left: Value, right: Value) -> Result<Value> {
+fn binary(operator: &Token, left: Value, right: Value) -> RuntimeResult<Value> {
     let err = |msg: &str| {
         Err(RuntimeError {
             token: operator.clone(),

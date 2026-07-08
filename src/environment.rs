@@ -1,6 +1,6 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
-use crate::interpreter::{Result, RuntimeError, Value};
+use crate::interpreter::{RuntimeError, RuntimeResult, Value};
 use crate::token::Token;
 
 #[derive(Debug, Clone)]
@@ -23,7 +23,7 @@ impl Environment {
             enclosing: Some(enclosing),
         }
     }
-    pub fn define(&mut self, name: &Token, value: Value) -> Result<()> {
+    pub fn define(&mut self, name: &Token, value: Value) -> RuntimeResult<()> {
         if self.values.contains_key(name.lexeme()) {
             return Err(RuntimeError {
                 token: name.clone(),
@@ -38,7 +38,7 @@ impl Environment {
         Ok(())
     }
 
-    pub fn assign(&mut self, name: &Token, value: Value) -> Result<()> {
+    pub fn assign(&mut self, name: &Token, value: Value) -> RuntimeResult<()> {
         if let Some(variable) = self.values.get_mut(name.lexeme()) {
             *variable = value;
             Ok(())
@@ -52,7 +52,7 @@ impl Environment {
         }
     }
 
-    pub fn get(&self, name: &Token) -> Result<Value> {
+    pub fn get(&self, name: &Token) -> RuntimeResult<Value> {
         if let Some(value) = self.values.get(name.lexeme()) {
             return Ok(value.clone());
         }

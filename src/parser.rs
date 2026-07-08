@@ -3,6 +3,7 @@ use std::fmt::{self};
 
 use crate::token::*;
 
+/////////////////////////////////////////////////////////////////////////////////////////
 pub type ParseResult<T> = std::result::Result<T, ParseError>;
 
 #[derive(Debug)]
@@ -29,66 +30,106 @@ impl fmt::Display for ParseError {
     }
 }
 
+/////////////////////////////////////////////////////////////////////////////////////////
+#[derive(Debug, Clone)]
+pub struct UnaryExpr {
+    pub operator: Token,
+    pub right: Expr,
+}
+
+#[derive(Debug, Clone)]
+pub struct BinaryExpr {
+    pub left: Expr,
+    pub right: Expr,
+    pub operator: Token,
+}
+
+#[derive(Debug, Clone)]
+pub struct AssignmentExpr {
+    pub name: Token,
+    pub value: Expr,
+}
+
+#[derive(Debug, Clone)]
+pub struct ConditionalExpr {
+    pub condition: Expr,
+    pub then_branch: Expr,
+    pub else_branch: Expr,
+}
+
+#[derive(Debug, Clone)]
+pub struct LogicalExpr {
+    pub operator: Token,
+    pub left: Expr,
+    pub right: Expr,
+}
+
+#[derive(Debug, Clone)]
+pub struct Call {
+    pub callee: Expr,
+    pub paren: Token,
+    pub args: Vec<Expr>,
+}
+
 #[derive(Debug, Clone)]
 pub enum Expr {
+    Var(Token),
     Literal(Literal),
     Grouping(Box<Expr>),
-    Unary {
-        operator: Token,
-        right: Box<Expr>,
-    },
-    Assignment {
-        name: Token,
-        value: Box<Expr>,
-    },
-    Binary {
-        left: Box<Expr>,
-        right: Box<Expr>,
-        operator: Token,
-    },
-    Conditional {
-        condition: Box<Expr>,
-        then_branch: Box<Expr>,
-        else_branch: Box<Expr>,
-    },
-    Logical {
-        left: Box<Expr>,
-        right: Box<Expr>,
-        operator: Token,
-    },
-    Var(Token),
-    Call {
-        callee: Box<Expr>,
-        paren: Token,
-        args: Vec<Expr>,
-    },
+    Unary(Box<UnaryExpr>),
+    Binary(Box<BinaryExpr>),
+    Assignment(Box<AssignmentExpr>),
+    Conditional(Box<ConditionalExpr>),
+    Logical(Box<LogicalExpr>),
+    Call(Box<Call>),
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////
+#[derive(Debug, Clone)]
+pub struct VarStmt {
+    pub name: Token,
+    pub initializer: Expr,
+}
+
+#[derive(Debug, Clone)]
+pub struct IfStmt {
+    pub condition: Expr,
+    pub then_branch: Box<Stmt>,
+    pub else_branch: Option<Box<Stmt>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct WhileStmt {
+    pub condition: Expr,
+    pub body: Box<Stmt>,
+}
+
+#[derive(Debug, Clone)]
+pub struct FuncStmt {
+    pub name: Token,
+    pub args: Vec<Token>,
+    pub body: Vec<Stmt>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ReturnStmt {
+    pub keyword: Token,
+    pub value: Expr,
 }
 
 #[derive(Debug, Clone)]
 pub enum Stmt {
     Print(Expr),
+    If(IfStmt),
+    Var(VarStmt),
+    Func(FuncStmt),
     Expression(Expr),
     Block(Vec<Stmt>),
-    Var {
-        name: Token,
-        initializer: Expr,
-    },
-    If {
-        condition: Expr,
-        then_branch: Box<Stmt>,
-        else_branch: Option<Box<Stmt>>,
-    },
-    While {
-        condition: Expr,
-        body: Box<Stmt>,
-    },
-    Func {
-        name: Token,
-        args: Vec<Token>,
-        body: Vec<Stmt>,
-    },
+    While(WhileStmt),
+    Return(ReturnStmt),
 }
 
+/////////////////////////////////////////////////////////////////////////////////////////
 pub struct Parser<'a> {
     tokens: &'a [Token],
     current: usize,
@@ -132,6 +173,8 @@ impl<'a> Parser<'a> {
             self.if_stmt()
         } else if self.match_token(&[TokenType::Print]) {
             self.print_stmt()
+        } else if self.match_token(&[TokenType::Return]) {
+            self.return_stmt()
         } else if self.match_token(&[TokenType::For]) {
             self.for_stmt()
         } else if self.match_token(&[TokenType::While]) {
@@ -141,6 +184,20 @@ impl<'a> Parser<'a> {
         } else {
             self.expr_stmt()
         }
+    }
+
+    fn return_stmt(&mut self) -> ParseResult<Stmt> {
+        let token = self.previous();
+        let mut expr = Expr::Literal(Literal::Nil);
+        if !self.check(TokenType::Semicolon) {
+            expr = self.expression()?;
+        }
+
+        self.consume(TokenType::Semicolon)?;
+        Ok(Stmt::Return(ReturnStmt {
+            keyword: token,
+            value: expr,
+        }))
     }
 
     fn for_stmt(&mut self) -> ParseResult<Stmt> {
@@ -174,10 +231,10 @@ impl<'a> Parser<'a> {
 
         let condition = condition.unwrap_or(Expr::Literal(Literal::True));
 
-        body = Stmt::While {
+        body = Stmt::While(WhileStmt {
             condition: condition,
             body: Box::new(body),
-        };
+        });
 
         if let Some(init) = initializer {
             body = Stmt::Block(vec![init, body]);
@@ -192,10 +249,10 @@ impl<'a> Parser<'a> {
         self.consume(TokenType::RParen)?;
         let body = self.statement()?;
 
-        Ok(Stmt::While {
+        Ok(Stmt::While(WhileStmt {
             condition,
             body: Box::new(body),
-        })
+        }))
     }
 
     fn if_stmt(&mut self) -> ParseResult<Stmt> {
@@ -211,11 +268,11 @@ impl<'a> Parser<'a> {
             None
         };
 
-        Ok(Stmt::If {
+        Ok(Stmt::If(IfStmt {
             condition,
             then_branch: Box::new(then_branch),
             else_branch: else_branch,
-        })
+        }))
     }
 
     fn print_stmt(&mut self) -> ParseResult<Stmt> {
@@ -230,7 +287,7 @@ impl<'a> Parser<'a> {
         Ok(Stmt::Expression(expr))
     }
 
-    fn function(&mut self, identiier: &str) -> ParseResult<Stmt> {
+    fn function(&mut self, identifier: &str) -> ParseResult<Stmt> {
         let name = self.consume(TokenType::Identifier)?;
         self.consume(TokenType::LParen)?;
 
@@ -250,7 +307,7 @@ impl<'a> Parser<'a> {
         self.consume(TokenType::LBrace)?;
         let body = self.block()?;
 
-        Ok(Stmt::Func { name, args, body })
+        Ok(Stmt::Func(FuncStmt { name, args, body }))
     }
 
     fn var_declaration(&mut self) -> ParseResult<Stmt> {
@@ -261,10 +318,10 @@ impl<'a> Parser<'a> {
             initializer = self.expression()?;
         }
         self.consume(TokenType::Semicolon)?;
-        Ok(Stmt::Var {
+        Ok(Stmt::Var(VarStmt {
             name: identifier,
             initializer: initializer,
-        })
+        }))
     }
 
     fn block(&mut self) -> ParseResult<Vec<Stmt>> {
@@ -288,11 +345,11 @@ impl<'a> Parser<'a> {
         while self.match_token(&[TokenType::Or]) {
             let operator = self.previous();
             let right = self.and()?;
-            expr = Expr::Logical {
-                left: Box::new(expr),
-                right: Box::new(right),
+            expr = Expr::Logical(Box::new(LogicalExpr {
+                left: expr,
+                right: right,
                 operator,
-            }
+            }));
         }
         Ok(expr)
     }
@@ -303,11 +360,11 @@ impl<'a> Parser<'a> {
         while self.match_token(&[TokenType::And]) {
             let operator = self.previous();
             let right = self.conditional()?;
-            expr = Expr::Logical {
-                left: Box::new(expr),
-                right: Box::new(right),
+            expr = Expr::Logical(Box::new(LogicalExpr {
+                left: expr,
+                right: right,
                 operator,
-            }
+            }));
         }
         Ok(expr)
     }
@@ -322,10 +379,10 @@ impl<'a> Parser<'a> {
 
             match expr {
                 Expr::Var(token) => {
-                    return Ok(Expr::Assignment {
+                    return Ok(Expr::Assignment(Box::new(AssignmentExpr {
                         name: token,
-                        value: Box::new(value),
-                    });
+                        value: value,
+                    })));
                 }
                 _ => {
                     return Err(ParseError {
@@ -348,11 +405,11 @@ impl<'a> Parser<'a> {
             self.consume(TokenType::Colon)?;
             let else_branch = self.conditional()?;
 
-            expr = Expr::Conditional {
-                condition: Box::new(expr),
-                then_branch: Box::new(then_branch),
-                else_branch: Box::new(else_branch),
-            }
+            expr = Expr::Conditional(Box::new(ConditionalExpr {
+                condition: expr,
+                then_branch: then_branch,
+                else_branch: else_branch,
+            }));
         }
         Ok(expr)
     }
@@ -363,11 +420,11 @@ impl<'a> Parser<'a> {
         while self.match_token(&[TokenType::BangEqual, TokenType::EqualEqual]) {
             let operator = self.previous();
             let right = self.comparison()?;
-            expr = Expr::Binary {
-                left: Box::new(expr),
-                right: Box::new(right),
+            expr = Expr::Binary(Box::new(BinaryExpr {
+                left: expr,
+                right: right,
                 operator: operator,
-            };
+            }));
         }
 
         Ok(expr)
@@ -385,11 +442,11 @@ impl<'a> Parser<'a> {
             let operator = self.previous();
             let right = self.term()?;
 
-            expr = Expr::Binary {
-                left: Box::new(expr),
-                right: Box::new(right),
-                operator,
-            };
+            expr = Expr::Binary(Box::new(BinaryExpr {
+                left: expr,
+                right: right,
+                operator: operator,
+            }));
         }
 
         Ok(expr)
@@ -402,11 +459,11 @@ impl<'a> Parser<'a> {
             let operator = self.previous();
             let right = self.factor()?;
 
-            expr = Expr::Binary {
-                left: Box::new(expr),
-                right: Box::new(right),
-                operator,
-            }
+            expr = Expr::Binary(Box::new(BinaryExpr {
+                left: expr,
+                right: right,
+                operator: operator,
+            }));
         }
 
         Ok(expr)
@@ -418,11 +475,11 @@ impl<'a> Parser<'a> {
         while self.match_token(&[TokenType::Slash, TokenType::Star]) {
             let operator = self.previous();
             let right = self.unary()?;
-            expr = Expr::Binary {
-                left: Box::new(expr),
-                right: Box::new(right),
-                operator,
-            }
+            expr = Expr::Binary(Box::new(BinaryExpr {
+                left: expr,
+                right: right,
+                operator: operator,
+            }));
         }
 
         Ok(expr)
@@ -432,10 +489,10 @@ impl<'a> Parser<'a> {
         if self.match_token(&[TokenType::Bang, TokenType::Minus]) {
             let operator = self.previous();
             let right = self.unary()?;
-            return Ok(Expr::Unary {
+            return Ok(Expr::Unary(Box::new(UnaryExpr {
                 operator,
-                right: Box::new(right),
-            });
+                right: right,
+            })));
         }
         self.call()
     }
@@ -475,11 +532,11 @@ impl<'a> Parser<'a> {
 
         let paren = self.consume(TokenType::RParen)?;
 
-        Ok(Expr::Call {
-            callee: Box::new(expr),
+        Ok(Expr::Call(Box::new(Call {
+            callee: expr,
             paren: paren,
             args,
-        })
+        })))
     }
 
     fn primary(&mut self) -> ParseResult<Expr> {
