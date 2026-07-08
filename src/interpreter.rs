@@ -20,7 +20,7 @@ impl From<RuntimeError> for ControlFlow {
 
 #[derive(Debug)]
 pub struct RuntimeError {
-    pub token: Token,
+    pub token: Option<Token>,
     pub message: String,
 }
 
@@ -28,7 +28,19 @@ impl std::error::Error for RuntimeError {}
 
 impl fmt::Display for RuntimeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "line: {} | {}", self.token.line(), self.message)
+        match &self.token {
+            Some(token) => write!(f, "line: {} | {}", token.line(), self.message),
+            None => write!(f, "{}", self.message),
+        }
+    }
+}
+
+impl RuntimeError {
+    fn new(msg: &str) -> Self {
+        Self {
+            token: None,
+            message: msg.to_string(),
+        }
     }
 }
 
@@ -40,6 +52,89 @@ pub enum Value {
     Bool(bool),
     Nil,
     Callable(Rc<dyn Callable>),
+}
+
+impl Value {
+    fn add(self, rhs: &Value) -> RuntimeResult<Value> {
+        match (self, rhs) {
+            (Value::Number(a), Value::Number(b)) => Ok(Value::Number(a + b)),
+            (Value::String(a), Value::String(b)) => Ok(Value::String(a + &b)),
+            (_, _) => Err(RuntimeError::new("operands must be numbers or strings")),
+        }
+    }
+
+    fn sub(self, rhs: &Value) -> RuntimeResult<Value> {
+        match (self, rhs) {
+            (Value::Number(a), Value::Number(b)) => Ok(Value::Number(a - b)),
+            (_, _) => Err(RuntimeError::new("operands must be numbers")),
+        }
+    }
+
+    fn mul(self, rhs: &Value) -> RuntimeResult<Value> {
+        match (self, rhs) {
+            (Value::Number(a), Value::Number(b)) => Ok(Value::Number(a * b)),
+            (_, _) => Err(RuntimeError::new("operands must be numbers")),
+        }
+    }
+
+    fn divide(self, rhs: &Value) -> RuntimeResult<Value> {
+        match (self, rhs) {
+            (Value::Number(a), Value::Number(b)) => Ok(Value::Number(a / b)),
+            (_, _) => Err(RuntimeError::new("operands must be numbers")),
+        }
+    }
+
+    fn equal(&self, rhs: &Value) -> RuntimeResult<Value> {
+        match (self, rhs) {
+            (Value::Number(a), Value::Number(b)) => Ok(Value::Bool(a == b)),
+            (Value::String(a), Value::String(b)) => Ok(Value::Bool(a == b)),
+            (ref a, Value::Bool(b)) => Ok(Value::Bool(is_truthy(a) == *b)),
+            (Value::Bool(a), ref b) => Ok(Value::Bool(*a == is_truthy(b))),
+            (_, _) => Err(RuntimeError::new("incompatable")),
+        }
+    }
+
+    fn not_equal(&self, rhs: &Value) -> RuntimeResult<Value> {
+        match (self, rhs) {
+            (Value::Number(a), Value::Number(b)) => Ok(Value::Bool(a != b)),
+            (Value::String(a), Value::String(b)) => Ok(Value::Bool(a != b)),
+            (ref a, Value::Bool(b)) => Ok(Value::Bool(is_truthy(a) != *b)),
+            (Value::Bool(a), ref b) => Ok(Value::Bool(*a != is_truthy(b))),
+            (_, _) => Err(RuntimeError::new("incompatable")),
+        }
+    }
+
+    fn greater(&self, rhs: &Value) -> RuntimeResult<Value> {
+        match (self, rhs) {
+            (Value::Number(a), Value::Number(b)) => Ok(Value::Bool(a > b)),
+            (Value::String(a), Value::String(b)) => Ok(Value::Bool(a > b)),
+            (_, _) => Err(RuntimeError::new("incompatable")),
+        }
+    }
+
+    fn greater_equal(&self, rhs: &Value) -> RuntimeResult<Value> {
+        match (self, rhs) {
+            (Value::Number(a), Value::Number(b)) => Ok(Value::Bool(a >= b)),
+            (Value::String(a), Value::String(b)) => Ok(Value::Bool(a >= b)),
+            (_, _) => Err(RuntimeError::new("incompatable")),
+        }
+    }
+
+    fn lesser(&self, rhs: &Value) -> RuntimeResult<Value> {
+        match (self, rhs) {
+            (Value::Number(a), Value::Number(b)) => Ok(Value::Bool(a < b)),
+            (Value::String(a), Value::String(b)) => Ok(Value::Bool(a < b)),
+            (_, _) => Err(RuntimeError::new("incompatable")),
+        }
+    }
+
+    fn lesser_equal(&self, rhs: &Value) -> RuntimeResult<Value> {
+        match (self, rhs) {
+            (Value::Number(a), Value::Number(b)) => Ok(Value::Bool(a <= b)),
+            (Value::String(a), Value::String(b)) => Ok(Value::Bool(a <= b)),
+            (_, _) => Err(RuntimeError::new("incompatable")),
+        }
+    }
 }
 
 impl fmt::Display for Value {
@@ -155,7 +250,12 @@ impl Interpreter {
                     ControlFlow::Error(e) => return Err(e),
                     ControlFlow::Return(_) => {
                         return Err(RuntimeError {
-                            token: Token::new(TokenType::Return, 0, String::from("return"), None),
+                            token: Some(Token::new(
+                                TokenType::Return,
+                                0,
+                                String::from("return"),
+                                None,
+                            )),
                             message: String::from("cannot return from top-level code."),
                         });
                     }
@@ -249,7 +349,7 @@ impl Interpreter {
             Expr::Binary(expr) => {
                 let v_left = self.evaluate(&expr.left)?;
                 let v_right = self.evaluate(&expr.right)?;
-                binary(&expr.operator, v_left, v_right)
+                binary(&expr.operator, v_left, &v_right)
             }
             Expr::Logical(expr) => {
                 let v_left = self.evaluate(&expr.left)?;
@@ -291,7 +391,7 @@ impl Interpreter {
                     Value::Callable(func) => {
                         if expr.args.len() != func.arity() {
                             return Err(RuntimeError {
-                                token: expr.paren.clone(),
+                                token: Some(expr.paren.clone()),
                                 message: format!(
                                     "expected {} arguments, got  {}",
                                     func.arity(),
@@ -302,7 +402,7 @@ impl Interpreter {
                         func.call(self, arguments)
                     }
                     _ => Err(RuntimeError {
-                        token: expr.paren.clone(),
+                        token: Some(expr.paren.clone()),
                         message: format!("can call only functions"),
                     }),
                 }
@@ -326,7 +426,7 @@ fn unary(operator: &Token, value: Value) -> RuntimeResult<Value> {
         TokenType::Minus => match value {
             Value::Number(n) => Ok(Value::Number(-n)),
             _ => Err(RuntimeError {
-                token: operator.clone(),
+                token: Some(operator.clone()),
                 message: String::from("operand must be a number"),
             }),
         },
@@ -335,50 +435,31 @@ fn unary(operator: &Token, value: Value) -> RuntimeResult<Value> {
     }
 }
 
-fn binary(operator: &Token, left: Value, right: Value) -> RuntimeResult<Value> {
+fn binary(operator: &Token, left: Value, right: &Value) -> RuntimeResult<Value> {
     let err = |msg: &str| {
         Err(RuntimeError {
-            token: operator.clone(),
+            token: Some(operator.clone()),
             message: String::from(msg),
         })
     };
-    match (operator.token_type(), left, right) {
-        (TokenType::Minus, Value::Number(a), Value::Number(b)) => Ok(Value::Number(a - b)),
-        (TokenType::Star, Value::Number(a), Value::Number(b)) => Ok(Value::Number(a * b)),
-        (TokenType::Slash, Value::Number(a), Value::Number(b)) => Ok(Value::Number(a / b)),
-        (TokenType::Greater, Value::Number(a), Value::Number(b)) => Ok(Value::Bool(a > b)),
-        (TokenType::GreaterEqual, Value::Number(a), Value::Number(b)) => Ok(Value::Bool(a >= b)),
-        (TokenType::Lesser, Value::Number(a), Value::Number(b)) => Ok(Value::Bool(a < b)),
-        (TokenType::LesserEqual, Value::Number(a), Value::Number(b)) => Ok(Value::Bool(a <= b)),
-        (TokenType::Plus, Value::Number(a), Value::Number(b)) => Ok(Value::Number(a + b)),
-        (TokenType::Plus, Value::String(a), Value::String(b)) => Ok(Value::String(a + &b)),
-        (TokenType::Plus, _, _) => err("operands must be numbers or strings"),
 
-        (TokenType::EqualEqual, ref a, Value::Bool(b)) => Ok(Value::Bool(is_truthy(a) == b)),
-        (TokenType::EqualEqual, Value::Bool(a), ref b) => Ok(Value::Bool(a == is_truthy(b))),
-        (TokenType::EqualEqual, Value::Number(a), Value::Number(b)) => Ok(Value::Bool(a == b)),
-        (TokenType::EqualEqual, Value::String(a), Value::String(b)) => Ok(Value::Bool(a == b)),
-        // (TokenType::EqualEqual, Value::Bool(a), Value::Bool(b)) => Ok(Value::Bool(a == b)),
-        (TokenType::EqualEqual, _, _) => Ok(Value::Bool(false)),
-
-        (TokenType::BangEqual, ref a, Value::Bool(b)) => Ok(Value::Bool(is_truthy(a) != b)),
-        (TokenType::BangEqual, Value::Bool(a), ref b) => Ok(Value::Bool(a != is_truthy(b))),
-        (TokenType::BangEqual, Value::Number(a), Value::Number(b)) => Ok(Value::Bool(a != b)),
-        (TokenType::BangEqual, Value::String(a), Value::String(b)) => Ok(Value::Bool(a != b)),
-        // (TokenType::BangEqual, Value::Bool(a), Value::Bool(b)) => Ok(Value::Bool(a != b)),
-        (
-            TokenType::Minus
-            | TokenType::Star
-            | TokenType::Slash
-            | TokenType::Greater
-            | TokenType::GreaterEqual
-            | TokenType::Lesser
-            | TokenType::LesserEqual,
-            _,
-            _,
-        ) => err("operands must be numbers"),
+    match operator.token_type() {
+        TokenType::Plus => left.add(right),
+        TokenType::Minus => left.sub(right),
+        TokenType::Star => left.mul(right),
+        TokenType::Slash => left.divide(right),
+        TokenType::EqualEqual => left.equal(right),
+        TokenType::BangEqual => left.not_equal(right),
+        TokenType::Greater => left.greater(right),
+        TokenType::GreaterEqual => left.greater_equal(right),
+        TokenType::Lesser => left.lesser(right),
+        TokenType::LesserEqual => left.lesser_equal(right),
         _ => err("unknown operator"),
     }
+    .map_err(|mut e| {
+        e.token = Some(operator.clone());
+        e
+    })
 }
 
 fn is_truthy(value: &Value) -> bool {

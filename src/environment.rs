@@ -26,7 +26,7 @@ impl Environment {
     pub fn define(&mut self, name: &Token, value: Value) -> RuntimeResult<()> {
         if self.values.contains_key(name.lexeme()) {
             return Err(RuntimeError {
-                token: name.clone(),
+                token: Some(name.clone()),
                 message: format!(
                     "Variable '{}' has already been declared in this scope.",
                     name.lexeme()
@@ -46,7 +46,7 @@ impl Environment {
             env.borrow_mut().assign(name, value)
         } else {
             Err(RuntimeError {
-                token: name.clone(),
+                token: Some(name.clone()),
                 message: format!("Undefined variable '{}'", name.lexeme()),
             })
         }
@@ -62,7 +62,7 @@ impl Environment {
         }
 
         Err(RuntimeError {
-            token: name.clone(),
+            token: Some(name.clone()),
             message: format!("Undefined variable '{}'", name.lexeme()),
         })
     }

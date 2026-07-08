@@ -1,4 +1,3 @@
-// TODO: Rc instead of cloning everywhere..(when the time comes)
 use std::fmt::{self};
 
 use crate::token::*;
