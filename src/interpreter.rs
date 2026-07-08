@@ -67,15 +67,13 @@ impl fmt::Debug for dyn Callable {
 }
 ////////////////////////////////////////////////////////////////////////////////////
 pub struct DamnFunc {
-    declaration: Stmt,
+    declaration: FuncStmt,
 }
 
 impl DamnFunc {
     fn new(declaration: Stmt) -> ParseResult<Self> {
         match declaration {
-            Stmt::Func(stmt) => Ok(Self {
-                declaration: Stmt::Func(stmt),
-            }),
+            Stmt::Func(stmt) => Ok(Self { declaration: stmt }),
             _ => Err(ParseError::new(0, "")),
         }
     }
@@ -83,28 +81,21 @@ impl DamnFunc {
 
 impl Callable for DamnFunc {
     fn arity(&self) -> usize {
-        if let Stmt::Func(stmt) = &self.declaration {
-            stmt.args.len()
-        } else {
-            0
-        }
+        self.declaration.args.len()
     }
     fn call(&self, interpreter: &mut Interpreter, args: Vec<Value>) -> RuntimeResult<Value> {
-        if let Stmt::Func(stmt) = &self.declaration {
-            let mut env = Environment::new_with_env(Rc::clone(&interpreter.environment));
-            for (token, value) in stmt.args.iter().zip(args.into_iter()) {
-                env.define(token, value)?;
-            }
-            let value = match interpreter.execute_block(&stmt.body, env) {
-                Err(e) => match e {
-                    ControlFlow::Return(v) => v,
-                    _ => Value::Nil,
-                },
-                Ok(_) => Value::Nil,
-            };
-            return Ok(value);
+        let mut env = Environment::new_with_env(Rc::clone(&interpreter.environment));
+        for (token, value) in self.declaration.args.iter().zip(args.into_iter()) {
+            env.define(token, value)?;
         }
-        Ok(Value::Nil)
+        let value = match interpreter.execute_block(&self.declaration.body, env) {
+            Err(e) => match e {
+                ControlFlow::Return(v) => v,
+                _ => Value::Nil,
+            },
+            Ok(_) => Value::Nil,
+        };
+        return Ok(value);
     }
 }
 
@@ -248,9 +239,9 @@ impl Interpreter {
 
     fn evaluate(&mut self, expr: &Expr) -> RuntimeResult<Value> {
         match expr {
-            Expr::Var(t) => self.environment.borrow().get(t),
-            Expr::Grouping(g) => self.evaluate(g),
             Expr::Literal(l) => literal(l),
+            Expr::Grouping(g) => self.evaluate(g),
+            Expr::Var(t) => self.environment.borrow().get(t),
             Expr::Unary(expr) => {
                 let value = self.evaluate(&expr.right)?;
                 unary(&expr.operator, value)
@@ -271,7 +262,6 @@ impl Interpreter {
                         return Ok(v_left);
                     }
                 }
-
                 self.evaluate(&expr.right)
             }
             Expr::Conditional(expr) => {
