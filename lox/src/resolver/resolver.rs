@@ -65,6 +65,7 @@ impl<'a> Resolver<'a> {
                 self.resolve_stmt(&stmt.body)?;
                 Ok(())
             }
+            _ => Ok(()),
         }
     }
 

@@ -83,6 +83,8 @@ impl<'a> Parser<'a> {
             self.if_stmt()
         } else if self.match_token(&[TokenType::Print]) {
             self.print_stmt()
+        } else if self.match_token(&[TokenType::Break]) {
+            self.break_stmt()
         } else if self.match_token(&[TokenType::Return]) {
             self.return_stmt()
         } else if self.match_token(&[TokenType::For]) {
@@ -94,6 +96,11 @@ impl<'a> Parser<'a> {
         } else {
             self.expr_stmt()
         }
+    }
+
+    fn break_stmt(&mut self) -> ParseResult<Stmt> {
+        self.consume(TokenType::Semicolon)?;
+        Ok(Stmt::Break)
     }
 
     fn return_stmt(&mut self) -> ParseResult<Stmt> {

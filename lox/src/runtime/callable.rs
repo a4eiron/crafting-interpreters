@@ -51,6 +51,7 @@ impl Callable for LoxFunction {
         }
         let value = match interpreter.execute_block(&self.declaration.body, env) {
             Err(e) => match e {
+                ControlFlow::Break => Value::Nil,
                 ControlFlow::Return(v) => v,
                 ControlFlow::Error(err) => return Err(err),
             },

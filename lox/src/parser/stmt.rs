@@ -35,6 +35,7 @@ pub struct ReturnStmt {
 
 #[derive(Debug, Clone)]
 pub enum Stmt {
+    Break,
     Print(Expr),
     If(IfStmt),
     Var(VarStmt),

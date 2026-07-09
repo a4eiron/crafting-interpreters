@@ -10,6 +10,7 @@ pub type RuntimeResult<T> = std::result::Result<T, RuntimeError>;
 pub enum ControlFlow {
     Error(RuntimeError),
     Return(Value),
+    Break,
 }
 
 pub struct Interpreter {
@@ -69,6 +70,7 @@ impl Interpreter {
         for stmt in stmts {
             if let Err(flow) = self.execute(stmt) {
                 match flow {
+                    ControlFlow::Break => {}
                     ControlFlow::Error(e) => return Err(e),
                     ControlFlow::Return(_) => {
                         return Err(RuntimeError {
@@ -133,7 +135,12 @@ impl Interpreter {
             Stmt::While(stmt) => {
                 let mut value = self.evaluate(&stmt.condition)?;
                 while is_truthy(&value) {
-                    self.execute(&stmt.body)?;
+                    match self.execute(&stmt.body) {
+                        Err(ControlFlow::Break) => break,
+                        Err(ControlFlow::Return(v)) => return Err(ControlFlow::Return(v)),
+                        Err(ControlFlow::Error(e)) => return Err(ControlFlow::Error(e)),
+                        Ok(_) => {}
+                    }
                     value = self.evaluate(&stmt.condition)?;
                 }
             }
@@ -150,6 +157,7 @@ impl Interpreter {
                 }
                 return Err(ControlFlow::Return(v));
             }
+            Stmt::Break => return Err(ControlFlow::Break),
         }
         Ok(())
     }
