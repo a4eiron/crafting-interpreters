@@ -101,7 +101,7 @@ impl fmt::Display for Value {
             Self::String(s) => write!(f, "{}", s),
             Self::Nil => write!(f, "<nil>"),
             Self::Bool(b) => write!(f, "{}", b),
-            Self::Callable(func) => write!(f, "<func {}>", func.name()),
+            Self::Callable(func) => write!(f, "{}", func),
         }
     }
 }

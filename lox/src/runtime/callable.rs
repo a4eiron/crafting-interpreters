@@ -5,15 +5,14 @@ use std::cell::RefCell;
 use std::fmt;
 use std::rc::Rc;
 
-pub trait Callable {
+pub trait Callable: fmt::Display {
     fn call(&self, interpreter: &mut Interpreter, args: Vec<Value>) -> RuntimeResult<Value>;
     fn arity(&self) -> usize;
-    fn name(&self) -> String;
 }
 
 impl fmt::Debug for dyn Callable {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "<Callable {}>", self.name())
+        write!(f, "<Callable {}>", self)
     }
 }
 ////////////////////////////////////////////////////////////////////////////////////
@@ -22,7 +21,7 @@ pub struct LoxFunction {
     closure: Rc<RefCell<Environment>>,
 }
 
-impl fmt::Debug for LoxFunction {
+impl fmt::Display for LoxFunction {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "<func {}>", self.declaration.name.lexeme())
     }
@@ -38,9 +37,6 @@ impl LoxFunction {
 }
 
 impl Callable for LoxFunction {
-    fn name(&self) -> String {
-        self.declaration.name.lexeme().to_string()
-    }
     fn arity(&self) -> usize {
         self.declaration.params.len()
     }

@@ -25,10 +25,13 @@ impl Interpreter {
 
         struct Clock;
 
-        impl Callable for Clock {
-            fn name(&self) -> String {
-                String::from("clock")
+        impl fmt::Display for Clock {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                write!(f, "<func clock>")
             }
+        }
+
+        impl Callable for Clock {
             fn arity(&self) -> usize {
                 0
             }
