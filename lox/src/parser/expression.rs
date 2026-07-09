@@ -40,8 +40,16 @@ pub struct Call {
     pub args: Vec<Expr>,
 }
 
+pub type ExprId = usize;
+
 #[derive(Debug, Clone)]
-pub enum Expr {
+pub struct Expr {
+    pub id: ExprId,
+    pub kind: ExprKind,
+}
+
+#[derive(Debug, Clone)]
+pub enum ExprKind {
     Var(Token),
     Literal(Literal),
     Grouping(Box<Expr>),

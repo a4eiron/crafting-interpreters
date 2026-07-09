@@ -42,11 +42,11 @@ impl Callable for LoxFunction {
         self.declaration.name.lexeme().to_string()
     }
     fn arity(&self) -> usize {
-        self.declaration.args.len()
+        self.declaration.params.len()
     }
     fn call(&self, interpreter: &mut Interpreter, args: Vec<Value>) -> RuntimeResult<Value> {
         let mut env = Environment::new_with_env(Rc::clone(&self.closure));
-        for (token, value) in self.declaration.args.iter().zip(args.into_iter()) {
+        for (token, value) in self.declaration.params.iter().zip(args.into_iter()) {
             env.define(token, value)?;
         }
         let value = match interpreter.execute_block(&self.declaration.body, env) {

@@ -50,6 +50,15 @@ impl Environment {
             })
         }
     }
+    pub fn assign_at(
+        env: Rc<RefCell<Environment>>,
+        name: &Token,
+        value: Value,
+        distance: usize,
+    ) -> RuntimeResult<()> {
+        let env = Self::ancestor(env, distance);
+        env.borrow_mut().assign(name, value)
+    }
 
     pub fn get(&self, name: &Token) -> RuntimeResult<Value> {
         if let Some(value) = self.values.get(name.lexeme()) {
@@ -64,5 +73,22 @@ impl Environment {
             token: Some(name.clone()),
             message: format!("Undefined variable '{}'", name.lexeme()),
         })
+    }
+    pub fn get_at(
+        env: Rc<RefCell<Environment>>,
+        distance: usize,
+        name: &Token,
+    ) -> RuntimeResult<Value> {
+        let env = Self::ancestor(env, distance);
+        env.borrow().get(name)
+    }
+
+    pub fn ancestor(env: Rc<RefCell<Environment>>, distance: usize) -> Rc<RefCell<Environment>> {
+        let mut current = env;
+        for _ in 0..distance {
+            let next = current.borrow().enclosing.clone().unwrap();
+            current = next;
+        }
+        current
     }
 }

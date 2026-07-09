@@ -2,6 +2,7 @@ use std::{fs, process::exit};
 
 use lox::Interpreter;
 use lox::Parser;
+use lox::Resolver;
 use lox::Scanner;
 
 fn main() {
@@ -27,6 +28,10 @@ fn run_file(path: &str) -> std::result::Result<(), Box<dyn std::error::Error>> {
     let stmts = parser.parse()?;
 
     let mut interpreter = Interpreter::new();
+
+    let mut resolver = Resolver::new(&mut interpreter);
+    resolver.resolve(&stmts)?;
+
     interpreter.interpret(&stmts)?;
 
     // print!("{expr:#?}");

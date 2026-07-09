@@ -1,28 +1,10 @@
-func makeCounter() {
-  var i = 0;
-  func count() {
-    i = i + 1;
-    print i;
+var a = "global";
+{
+  func showA() {
+    print a;
   }
 
-  return count;
+  showA();
+  var a = "block";
+  showA();
 }
-
-var counter = makeCounter();
-counter(); // "1".
-counter(); // "2".
-counter(); // "3".
-
-func add(a, b) {
-	return a + b;
-}
-
-print add(1, 110);
-
-print makeCounter;
-print clock;
-print counter;
-
-print clock();
-print clock();
-

@@ -23,7 +23,7 @@ pub struct WhileStmt {
 #[derive(Debug, Clone)]
 pub struct FuncStmt {
     pub name: Token,
-    pub args: Vec<Token>,
+    pub params: Vec<Token>,
     pub body: Vec<Stmt>,
 }
 

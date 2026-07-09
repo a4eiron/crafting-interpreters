@@ -2,6 +2,7 @@ use crate::lexer::*;
 use crate::parser::*;
 use crate::runtime::*;
 
+use std::collections::HashMap;
 use std::{cell::RefCell, rc::Rc};
 
 pub type RuntimeResult<T> = std::result::Result<T, RuntimeError>;
@@ -13,6 +14,7 @@ pub enum ControlFlow {
 
 pub struct Interpreter {
     globals: Rc<RefCell<Environment>>,
+    locals: HashMap<ExprId, usize>,
     environment: Rc<RefCell<Environment>>,
 }
 
@@ -59,6 +61,7 @@ impl Interpreter {
         Self {
             globals: Rc::clone(&global_env),
             environment: Rc::clone(&global_env),
+            locals: HashMap::new(),
         }
     }
 
@@ -142,7 +145,7 @@ impl Interpreter {
             }
             Stmt::Return(stmt) => {
                 let mut v = Value::Nil;
-                if !matches!(&stmt.value, Expr::Literal(Literal::Nil)) {
+                if !matches!(&stmt.value.kind, ExprKind::Literal(Literal::Nil)) {
                     v = self.evaluate(&stmt.value)?;
                 }
                 return Err(ControlFlow::Return(v));
@@ -152,20 +155,26 @@ impl Interpreter {
     }
 
     fn evaluate(&mut self, expr: &Expr) -> RuntimeResult<Value> {
-        match expr {
-            Expr::Literal(l) => literal(l),
-            Expr::Grouping(g) => self.evaluate(g),
-            Expr::Var(t) => self.environment.borrow().get(t),
-            Expr::Unary(expr) => {
+        match &expr.kind {
+            ExprKind::Literal(l) => literal(l),
+            ExprKind::Grouping(g) => self.evaluate(g),
+            ExprKind::Var(t) => {
+                if let Some(&distance) = self.locals.get(&expr.id) {
+                    Environment::get_at(self.environment.clone(), distance, t)
+                } else {
+                    self.globals.borrow().get(t)
+                }
+            }
+            ExprKind::Unary(expr) => {
                 let value = self.evaluate(&expr.right)?;
                 unary(&expr.operator, value)
             }
-            Expr::Binary(expr) => {
+            ExprKind::Binary(expr) => {
                 let v_left = self.evaluate(&expr.left)?;
                 let v_right = self.evaluate(&expr.right)?;
                 binary(&expr.operator, v_left, &v_right)
             }
-            Expr::Logical(expr) => {
+            ExprKind::Logical(expr) => {
                 let v_left = self.evaluate(&expr.left)?;
                 if &expr.operator.token_type() == &TokenType::Or {
                     if is_truthy(&v_left) {
@@ -178,7 +187,7 @@ impl Interpreter {
                 }
                 self.evaluate(&expr.right)
             }
-            Expr::Conditional(expr) => {
+            ExprKind::Conditional(expr) => {
                 let v_condition = self.evaluate(&expr.condition)?;
                 if is_truthy(&v_condition) {
                     self.evaluate(&expr.then_branch)
@@ -186,14 +195,16 @@ impl Interpreter {
                     self.evaluate(&expr.else_branch)
                 }
             }
-            Expr::Assignment(expr) => {
-                let v = self.evaluate(&expr.value)?;
-                self.environment
-                    .borrow_mut()
-                    .assign(&expr.name, v.clone())?;
+            ExprKind::Assignment(e) => {
+                let v = self.evaluate(&e.value)?;
+                if let Some(&distance) = self.locals.get(&expr.id) {
+                    Environment::assign_at(self.environment.clone(), &e.name, v.clone(), distance)?;
+                } else {
+                    self.globals.borrow_mut().assign(&e.name, v.clone())?;
+                }
                 Ok(v)
             }
-            Expr::Call(expr) => {
+            ExprKind::Call(expr) => {
                 let callee = self.evaluate(&expr.callee)?;
                 let mut arguments = Vec::new();
 
@@ -222,6 +233,10 @@ impl Interpreter {
                 }
             }
         }
+    }
+
+    pub fn resolve(&mut self, expr: &Expr, i: usize) {
+        self.locals.insert(expr.id, i);
     }
 }
 
