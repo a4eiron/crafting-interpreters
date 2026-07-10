@@ -3,6 +3,7 @@ var a = "global";
   func showA() {
     print a;
   }
+  print showA;
 
   showA();
   var a = "block";
@@ -22,3 +23,26 @@ for (var i = 1; i < 5; i = i + 1){
 	print i;
 	break;
 }
+
+print clock;
+
+class Animal {
+	speak() {
+		return;
+	}
+}
+
+print Animal;
+
+var instance = Animal();
+print instance;
+
+
+class Bacon {
+  eat() {
+    print "Crunch crunch crunch!";
+  }
+}
+
+Bacon().eat();
+

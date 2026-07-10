@@ -69,8 +69,10 @@ impl<'a> Parser<'a> {
     }
 
     fn declaration(&mut self) -> ParseResult<Stmt> {
-        if self.match_token(&[TokenType::Func]) {
-            self.function("function")
+        if self.match_token(&[TokenType::Class]) {
+            self.class_declaration()
+        } else if self.match_token(&[TokenType::Func]) {
+            self.func_declaration("function")
         } else if self.match_token(&[TokenType::Var]) {
             self.var_declaration()
         } else {
@@ -204,7 +206,26 @@ impl<'a> Parser<'a> {
         Ok(Stmt::Expression(expr))
     }
 
-    fn function(&mut self, identifier: &str) -> ParseResult<Stmt> {
+    fn class_declaration(&mut self) -> ParseResult<Stmt> {
+        let name = self.consume(TokenType::Identifier)?.clone();
+        self.consume(TokenType::LBrace)?;
+        let mut methods = Vec::new();
+
+        while !self.check(TokenType::RBrace) && !self.at_end() {
+            if let Stmt::Func(func_stmt) = self.func_declaration("method")? {
+                methods.push(func_stmt);
+            }
+        }
+
+        self.consume(TokenType::RBrace)?;
+
+        Ok(Stmt::Class(ClassStmt {
+            name: name,
+            methods,
+        }))
+    }
+
+    fn func_declaration(&mut self, kind: &str) -> ParseResult<Stmt> {
         let name = self.consume(TokenType::Identifier)?.clone();
         self.consume(TokenType::LParen)?;
 
@@ -299,6 +320,13 @@ impl<'a> Parser<'a> {
             let value = self.assignment()?;
 
             match expr.kind {
+                ExprKind::Set(set_expr) => {
+                    return Ok(self.expr(ExprKind::Set(Box::new(SetExpr {
+                        object: set_expr.object,
+                        name: set_expr.name,
+                        value: value,
+                    }))));
+                }
                 ExprKind::Var(token) => {
                     return Ok(self.expr(ExprKind::Assignment(Box::new(AssignmentExpr {
                         name: token,
@@ -424,6 +452,9 @@ impl<'a> Parser<'a> {
         loop {
             if self.match_token(&[TokenType::LParen]) {
                 expr = self.finish_call(expr)?;
+            } else if self.match_token(&[TokenType::Dot]) {
+                let name = self.consume(TokenType::Identifier)?.clone();
+                expr = self.expr(ExprKind::Get(Box::new(GetExpr { object: expr, name })))
             } else {
                 break;
             }

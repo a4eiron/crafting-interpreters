@@ -16,6 +16,7 @@ impl fmt::Debug for dyn Callable {
     }
 }
 ////////////////////////////////////////////////////////////////////////////////////
+#[derive(Debug, Clone)]
 pub struct LoxFunction {
     declaration: FuncStmt,
     closure: Rc<RefCell<Environment>>,

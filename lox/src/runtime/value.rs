@@ -4,11 +4,13 @@ use crate::runtime::*;
 
 #[derive(Debug, Clone)]
 pub enum Value {
+    Nil,
+    Bool(bool),
     Number(f64),
     String(String),
-    Bool(bool),
-    Nil,
     Callable(Rc<dyn Callable>),
+    Class(Rc<LoxClass>),
+    Instance(LoxInstance),
 }
 
 impl Value {
@@ -102,6 +104,8 @@ impl fmt::Display for Value {
             Self::Nil => write!(f, "<nil>"),
             Self::Bool(b) => write!(f, "{}", b),
             Self::Callable(func) => write!(f, "{}", func),
+            Self::Class(class) => write!(f, "{}", class),
+            Self::Instance(instance) => write!(f, "{}", instance),
         }
     }
 }

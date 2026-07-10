@@ -3,6 +3,7 @@ use crate::parser::*;
 use crate::runtime::*;
 
 use std::collections::HashMap;
+use std::fmt;
 use std::{cell::RefCell, rc::Rc};
 
 pub type RuntimeResult<T> = std::result::Result<T, RuntimeError>;
@@ -75,17 +76,7 @@ impl Interpreter {
                 match flow {
                     ControlFlow::Break => {}
                     ControlFlow::Error(e) => return Err(e),
-                    ControlFlow::Return(_) => {
-                        return Err(RuntimeError {
-                            token: Some(Token::new(
-                                TokenType::Return,
-                                0,
-                                String::from("return"),
-                                None,
-                            )),
-                            message: String::from("cannot return from top-level code."),
-                        });
-                    }
+                    ControlFlow::Return(_) => {}
                 }
             }
         }
@@ -153,6 +144,22 @@ impl Interpreter {
                     .borrow_mut()
                     .define(&stmt.name, Value::Callable(Rc::new(func)))?;
             }
+            Stmt::Class(stmt) => {
+                self.environment
+                    .borrow_mut()
+                    .define(&stmt.name, Value::Nil)?;
+
+                let mut methods: HashMap<String, Rc<LoxFunction>> = HashMap::new();
+                for method in &stmt.methods {
+                    let func = LoxFunction::new(method.clone(), Rc::clone(&self.environment));
+                    methods.insert(method.name.lexeme().into(), Rc::new(func));
+                }
+
+                let class = LoxClass::new(&stmt.name.lexeme(), methods);
+                self.environment
+                    .borrow_mut()
+                    .assign(&stmt.name, Value::Class(Rc::new(class)))?;
+            }
             Stmt::Return(stmt) => {
                 let mut v = Value::Nil;
                 if !matches!(&stmt.value.kind, ExprKind::Literal(Literal::Nil)) {
@@ -215,6 +222,33 @@ impl Interpreter {
                 }
                 Ok(v)
             }
+            ExprKind::Get(expr) => {
+                let v = self.evaluate(&expr.object)?;
+
+                if let Value::Instance(instance) = &v {
+                    let v = instance.get(&expr.name)?;
+                    return Ok(v);
+                }
+                Err(RuntimeError {
+                    token: Some(expr.name.clone()),
+                    message: format!("only instances have methods"),
+                })
+            }
+
+            ExprKind::Set(expr) => {
+                let mut v = self.evaluate(&expr.object)?;
+                if let Value::Instance(instance) = &mut v {
+                    let _v = self.evaluate(&expr.value)?;
+                    instance.set(expr.name.clone(), _v.clone())?;
+                    return Ok(_v);
+                }
+
+                Err(RuntimeError {
+                    token: Some(expr.name.clone()),
+                    message: format!("only instances have fields"),
+                })
+            }
+
             ExprKind::Call(expr) => {
                 let callee = self.evaluate(&expr.callee)?;
                 let mut arguments = Vec::new();
@@ -237,9 +271,14 @@ impl Interpreter {
                         }
                         func.call(self, arguments)
                     }
+
+                    Value::Class(class) => {
+                        let instance = LoxInstance::new(class.clone());
+                        Ok(Value::Instance(instance))
+                    }
                     _ => Err(RuntimeError {
                         token: Some(expr.paren.clone()),
-                        message: format!("can call only functions"),
+                        message: format!("can call only callables"),
                     }),
                 }
             }

@@ -34,14 +34,21 @@ pub struct ReturnStmt {
 }
 
 #[derive(Debug, Clone)]
+pub struct ClassStmt {
+    pub name: Token,
+    pub methods: Vec<FuncStmt>,
+}
+
+#[derive(Debug, Clone)]
 pub enum Stmt {
     Break,
     Print(Expr),
     If(IfStmt),
-    Var(VarStmt),
-    Func(FuncStmt),
     Expression(Expr),
     Block(Vec<Stmt>),
     While(WhileStmt),
     Return(ReturnStmt),
+    Var(VarStmt),
+    Func(FuncStmt),
+    Class(ClassStmt),
 }

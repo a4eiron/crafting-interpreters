@@ -40,6 +40,19 @@ pub struct Call {
     pub args: Vec<Expr>,
 }
 
+#[derive(Debug, Clone)]
+pub struct GetExpr {
+    pub object: Expr,
+    pub name: Token,
+}
+
+#[derive(Debug, Clone)]
+pub struct SetExpr {
+    pub object: Expr,
+    pub name: Token,
+    pub value: Expr,
+}
+
 pub type ExprId = usize;
 
 #[derive(Debug, Clone)]
@@ -59,4 +72,6 @@ pub enum ExprKind {
     Conditional(Box<ConditionalExpr>),
     Logical(Box<LogicalExpr>),
     Call(Box<Call>),
+    Get(Box<GetExpr>),
+    Set(Box<SetExpr>),
 }

@@ -7,9 +7,17 @@ use crate::runtime::Interpreter;
 
 pub type ResolveResult<T> = std::result::Result<T, ResolveError>;
 
+#[derive(Debug, Copy, Clone)]
+enum FunctionType {
+    None,
+    Function,
+    Method,
+}
+
 pub struct Resolver<'a> {
     interpreter: &'a mut Interpreter,
     scopes: Vec<HashMap<String, bool>>,
+    current_function: FunctionType,
 }
 
 impl<'a> Resolver<'a> {
@@ -17,6 +25,7 @@ impl<'a> Resolver<'a> {
         Self {
             interpreter,
             scopes: Vec::new(),
+            current_function: FunctionType::None,
         }
     }
 
@@ -46,7 +55,7 @@ impl<'a> Resolver<'a> {
             Stmt::Func(stmt) => {
                 self.declare(stmt.name.clone())?;
                 self.define(stmt.name.clone());
-                self.resolve_function(stmt)?;
+                self.resolve_function(stmt, FunctionType::Function)?;
                 Ok(())
             }
             Stmt::If(stmt) => {
@@ -59,10 +68,27 @@ impl<'a> Resolver<'a> {
             }
             Stmt::Expression(expr) => self.resolve_expr(expr),
             Stmt::Print(expr) => self.resolve_expr(expr),
-            Stmt::Return(stmt) => self.resolve_expr(&stmt.value),
+            Stmt::Return(stmt) => {
+                if matches!(self.current_function, FunctionType::None) {
+                    return Err(ResolveError {
+                        token: Some(stmt.keyword.clone()),
+                        message: "cannot return from top-level code".to_string(),
+                    });
+                }
+                self.resolve_expr(&stmt.value)
+            }
             Stmt::While(stmt) => {
                 self.resolve_expr(&stmt.condition)?;
                 self.resolve_stmt(&stmt.body)?;
+                Ok(())
+            }
+            Stmt::Class(stmt) => {
+                self.declare(stmt.name.clone())?;
+                self.define(stmt.name.clone());
+                for method in &stmt.methods {
+                    let declaration = FunctionType::Method;
+                    self.resolve_function(method, declaration)?;
+                }
                 Ok(())
             }
             _ => Ok(()),
@@ -109,6 +135,12 @@ impl<'a> Resolver<'a> {
                 self.resolve_expr(&expr.right)?;
                 Ok(())
             }
+            ExprKind::Get(expr) => self.resolve_expr(&expr.object),
+            ExprKind::Set(expr) => {
+                self.resolve_expr(&expr.value)?;
+                self.resolve_expr(&expr.object)?;
+                Ok(())
+            }
             _ => Ok(()),
         }
     }
@@ -122,7 +154,8 @@ impl<'a> Resolver<'a> {
         }
     }
 
-    fn resolve_function(&mut self, func: &FuncStmt) -> ResolveResult<()> {
+    fn resolve_function(&mut self, func: &FuncStmt, func_type: FunctionType) -> ResolveResult<()> {
+        let enclosing_function = std::mem::replace(&mut self.current_function, func_type);
         self.begin_scope();
         for param in &func.params {
             self.declare(param.clone())?;
@@ -131,6 +164,7 @@ impl<'a> Resolver<'a> {
 
         self.resolve(&func.body)?;
         self.end_scope();
+        self.current_function = enclosing_function;
         Ok(())
     }
 
