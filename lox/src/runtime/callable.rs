@@ -1,3 +1,4 @@
+use crate::lexer::Token;
 use crate::parser::FuncStmt;
 use crate::runtime::*;
 
@@ -13,47 +14,5 @@ pub trait Callable: fmt::Display {
 impl fmt::Debug for dyn Callable {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "<Callable {}>", self)
-    }
-}
-////////////////////////////////////////////////////////////////////////////////////
-#[derive(Debug, Clone)]
-pub struct LoxFunction {
-    declaration: FuncStmt,
-    closure: Rc<RefCell<Environment>>,
-}
-
-impl fmt::Display for LoxFunction {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "<func {}>", self.declaration.name.lexeme())
-    }
-}
-
-impl LoxFunction {
-    pub fn new(declaration: FuncStmt, closure: Rc<RefCell<Environment>>) -> Self {
-        Self {
-            declaration,
-            closure,
-        }
-    }
-}
-
-impl Callable for LoxFunction {
-    fn arity(&self) -> usize {
-        self.declaration.params.len()
-    }
-    fn call(&self, interpreter: &mut Interpreter, args: Vec<Value>) -> RuntimeResult<Value> {
-        let mut env = Environment::new_with_env(Rc::clone(&self.closure));
-        for (token, value) in self.declaration.params.iter().zip(args.into_iter()) {
-            env.define(token, value)?;
-        }
-        let value = match interpreter.execute_block(&self.declaration.body, env) {
-            Err(e) => match e {
-                ControlFlow::Break => Value::Nil,
-                ControlFlow::Return(v) => v,
-                ControlFlow::Error(err) => return Err(err),
-            },
-            Ok(_) => Value::Nil,
-        };
-        Ok(value)
     }
 }

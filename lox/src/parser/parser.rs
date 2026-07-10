@@ -510,6 +510,10 @@ impl<'a> Parser<'a> {
             }
         }
 
+        if self.match_token(&[TokenType::This]) {
+            return Ok(self.expr(ExprKind::This(self.previous().clone())));
+        }
+
         if self.match_token(&[TokenType::Identifier]) {
             return Ok(self.expr(ExprKind::Var(self.previous().clone())));
         }

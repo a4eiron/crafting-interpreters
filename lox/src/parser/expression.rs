@@ -74,4 +74,5 @@ pub enum ExprKind {
     Call(Box<Call>),
     Get(Box<GetExpr>),
     Set(Box<SetExpr>),
+    This(Token),
 }

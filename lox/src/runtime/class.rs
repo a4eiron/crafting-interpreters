@@ -52,7 +52,8 @@ impl LoxInstance {
         }
 
         if let Some(method) = self.class.find_method(name.lexeme()) {
-            return Ok(Value::Callable(method));
+            let bound = method.bind(self.clone())?;
+            return Ok(Value::Callable(Rc::new(bound)));
         }
 
         Err(RuntimeError {

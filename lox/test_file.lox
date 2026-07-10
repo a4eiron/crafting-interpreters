@@ -1,13 +1,13 @@
 var a = "global";
 {
-  func showA() {
-    print a;
-  }
-  print showA;
+	func showA() {
+		print a;
+	}
+	print showA;
 
-  showA();
-  var a = "block";
-  showA();
+	showA();
+	var a = "block";
+	showA();
 }
 
 var i = 1;
@@ -39,9 +39,10 @@ print instance;
 
 
 class Bacon {
-  eat() {
-    print "Crunch crunch crunch!";
-  }
+	eat() {
+		print this;
+		print "Crunch crunch crunch!";
+	}
 }
 
 Bacon().eat();

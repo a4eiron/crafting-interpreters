@@ -25,7 +25,6 @@ impl Interpreter {
         let global_env = Environment::new();
 
         struct Clock;
-
         impl fmt::Display for Clock {
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
                 write!(f, "<func clock>")
@@ -50,17 +49,15 @@ impl Interpreter {
             }
         }
 
+        let t = Token::new(
+            TokenType::Identifier,
+            0,
+            String::from("clock"),
+            Some(Literal::Nil),
+        );
         global_env
             .borrow_mut()
-            .define(
-                &Token::new(
-                    TokenType::Identifier,
-                    0,
-                    String::from("clock"),
-                    Some(Literal::Nil),
-                ),
-                Value::Callable(Rc::new(Clock)),
-            )
+            .define(&t, Value::Callable(Rc::new(Clock)))
             .unwrap();
 
         Self {
@@ -83,6 +80,255 @@ impl Interpreter {
         Ok(())
     }
 
+    fn execute(&mut self, stmt: &Stmt) -> std::result::Result<(), ControlFlow> {
+        match stmt {
+            Stmt::Var(stmt) => self.exec_var(stmt)?,
+            Stmt::Print(expr) => self.exec_print(expr)?,
+            Stmt::Expression(expr) => self.exec_expr(expr)?,
+            Stmt::Block(stmts) => self.exec_block(stmts)?,
+            Stmt::If(stmt) => self.exec_if(stmt)?,
+            Stmt::While(stmt) => self.exec_while(stmt)?,
+            Stmt::Func(stmt) => self.exec_func(stmt)?,
+            Stmt::Class(stmt) => self.exec_class(stmt)?,
+            Stmt::Return(stmt) => self.exec_return(stmt)?,
+            Stmt::Break => return Err(ControlFlow::Break),
+        }
+        Ok(())
+    }
+
+    fn exec_var(&mut self, stmt: &VarStmt) -> std::result::Result<(), ControlFlow> {
+        let value = self.evaluate(&stmt.initializer)?;
+        self.environment.borrow_mut().define(&stmt.name, value)?;
+        Ok(())
+    }
+
+    fn exec_print(&mut self, expr: &Expr) -> std::result::Result<(), ControlFlow> {
+        let value = self.evaluate(expr)?;
+        println!("{value}");
+        Ok(())
+    }
+
+    fn exec_expr(&mut self, expr: &Expr) -> std::result::Result<(), ControlFlow> {
+        self.evaluate(expr)?;
+        Ok(())
+    }
+
+    fn exec_block(&mut self, stmts: &[Stmt]) -> std::result::Result<(), ControlFlow> {
+        self.execute_block(
+            stmts,
+            Environment::new_with_env(Rc::clone(&self.environment)),
+        )
+    }
+
+    fn exec_if(&mut self, stmt: &IfStmt) -> std::result::Result<(), ControlFlow> {
+        let value = self.evaluate(&stmt.condition)?;
+        if is_truthy(&value) {
+            self.execute(&stmt.then_branch)?;
+        } else if let Some(stmt) = &stmt.else_branch {
+            self.execute(&stmt)?
+        }
+        Ok(())
+    }
+
+    fn exec_while(&mut self, stmt: &WhileStmt) -> std::result::Result<(), ControlFlow> {
+        let mut value = self.evaluate(&stmt.condition)?;
+        while is_truthy(&value) {
+            match self.execute(&stmt.body) {
+                Err(ControlFlow::Break) => break,
+                Err(ControlFlow::Return(v)) => return Err(ControlFlow::Return(v)),
+                Err(ControlFlow::Error(e)) => return Err(ControlFlow::Error(e)),
+                Ok(_) => {}
+            }
+            value = self.evaluate(&stmt.condition)?;
+        }
+
+        Ok(())
+    }
+
+    fn exec_func(&mut self, stmt: &FuncStmt) -> std::result::Result<(), ControlFlow> {
+        let func = LoxFunction::new(stmt.clone(), Rc::clone(&self.environment));
+        self.environment
+            .borrow_mut()
+            .define(&stmt.name, Value::Callable(Rc::new(func)))?;
+        Ok(())
+    }
+
+    fn exec_class(&mut self, stmt: &ClassStmt) -> std::result::Result<(), ControlFlow> {
+        self.environment
+            .borrow_mut()
+            .define(&stmt.name, Value::Nil)?;
+
+        let mut methods: HashMap<String, Rc<LoxFunction>> = HashMap::new();
+        for method in &stmt.methods {
+            let func = LoxFunction::new(method.clone(), Rc::clone(&self.environment));
+            methods.insert(method.name.lexeme().into(), Rc::new(func));
+        }
+
+        let class = LoxClass::new(&stmt.name.lexeme(), methods);
+        self.environment
+            .borrow_mut()
+            .assign(&stmt.name, Value::Class(Rc::new(class)))?;
+        Ok(())
+    }
+
+    fn exec_return(&mut self, stmt: &ReturnStmt) -> std::result::Result<(), ControlFlow> {
+        let mut v = Value::Nil;
+        if !matches!(&stmt.value.kind, ExprKind::Literal(Literal::Nil)) {
+            v = self.evaluate(&stmt.value)?;
+        }
+        return Err(ControlFlow::Return(v));
+    }
+
+    //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    fn evaluate(&mut self, expression: &Expr) -> RuntimeResult<Value> {
+        match &expression.kind {
+            ExprKind::Literal(l) => literal(l),
+            ExprKind::Grouping(g) => self.evaluate(g),
+            ExprKind::Var(token) => self.eval_var(token, expression),
+            ExprKind::Unary(expr) => self.eval_unary(expr),
+            ExprKind::Binary(expr) => self.eval_binary(expr),
+            ExprKind::Logical(expr) => self.eval_logical(expr),
+            ExprKind::Conditional(expr) => self.eval_conditional(expr),
+            ExprKind::Assignment(ass_expr) => self.eval_assigment(expression, ass_expr),
+            ExprKind::Get(expr) => self.eval_get(expr),
+            ExprKind::Set(expr) => self.eval_set(expr),
+            ExprKind::Call(expr) => self.eval_call(expr),
+            ExprKind::This(token) => self.eval_this(token, expression),
+        }
+    }
+
+    fn eval_var(&mut self, token: &Token, expression: &Expr) -> RuntimeResult<Value> {
+        if let Some(&distance) = self.locals.get(&expression.id) {
+            Environment::get_at(self.environment.clone(), distance, token)
+        } else {
+            self.globals.borrow().get(token)
+        }
+    }
+
+    fn eval_unary(&mut self, expr: &UnaryExpr) -> RuntimeResult<Value> {
+        let value = self.evaluate(&expr.right)?;
+        unary(&expr.operator, value)
+    }
+
+    fn eval_binary(&mut self, expr: &BinaryExpr) -> RuntimeResult<Value> {
+        let v_left = self.evaluate(&expr.left)?;
+        let v_right = self.evaluate(&expr.right)?;
+        binary(&expr.operator, v_left, &v_right)
+    }
+
+    fn eval_this(&mut self, token: &Token, expression: &Expr) -> RuntimeResult<Value> {
+        if let Some(&distance) = self.locals.get(&expression.id) {
+            Environment::get_at(self.environment.clone(), distance, token)
+        } else {
+            self.globals.borrow().get(token)
+        }
+    }
+
+    fn eval_set(&mut self, expr: &SetExpr) -> RuntimeResult<Value> {
+        let mut v = self.evaluate(&expr.object)?;
+        if let Value::Instance(instance) = &mut v {
+            let _v = self.evaluate(&expr.value)?;
+            instance.set(expr.name.clone(), _v.clone())?;
+            return Ok(_v);
+        }
+
+        Err(RuntimeError {
+            token: Some(expr.name.clone()),
+            message: format!("only instances have fields"),
+        })
+    }
+
+    fn eval_get(&mut self, expr: &GetExpr) -> RuntimeResult<Value> {
+        let v = self.evaluate(&expr.object)?;
+
+        if let Value::Instance(instance) = &v {
+            let v = instance.get(&expr.name)?;
+            return Ok(v);
+        }
+        Err(RuntimeError {
+            token: Some(expr.name.clone()),
+            message: format!("only instances have methods"),
+        })
+    }
+
+    fn eval_assigment(
+        &mut self,
+        expr: &Expr,
+        assignment_expr: &AssignmentExpr,
+    ) -> RuntimeResult<Value> {
+        let v = self.evaluate(&assignment_expr.value)?;
+        if let Some(&distance) = self.locals.get(&expr.id) {
+            Environment::assign_at(
+                self.environment.clone(),
+                &assignment_expr.name,
+                v.clone(),
+                distance,
+            )?;
+        } else {
+            self.globals
+                .borrow_mut()
+                .assign(&assignment_expr.name, v.clone())?;
+        }
+        Ok(v)
+    }
+
+    fn eval_conditional(&mut self, expr: &ConditionalExpr) -> RuntimeResult<Value> {
+        let v_condition = self.evaluate(&expr.condition)?;
+        if is_truthy(&v_condition) {
+            self.evaluate(&expr.then_branch)
+        } else {
+            self.evaluate(&expr.else_branch)
+        }
+    }
+
+    fn eval_logical(&mut self, expr: &LogicalExpr) -> RuntimeResult<Value> {
+        let v_left = self.evaluate(&expr.left)?;
+        if &expr.operator.token_type() == &TokenType::Or {
+            if is_truthy(&v_left) {
+                return Ok(v_left);
+            }
+        } else {
+            if !is_truthy(&v_left) {
+                return Ok(v_left);
+            }
+        }
+        self.evaluate(&expr.right)
+    }
+
+    fn eval_call(&mut self, expr: &Call) -> RuntimeResult<Value> {
+        let callee = self.evaluate(&expr.callee)?;
+        let mut arguments = Vec::new();
+
+        for arg in &expr.args {
+            arguments.push(self.evaluate(&arg)?);
+        }
+
+        match callee {
+            Value::Callable(func) => {
+                if expr.args.len() != func.arity() {
+                    return Err(RuntimeError {
+                        token: Some(expr.paren.clone()),
+                        message: format!(
+                            "expected {} arguments, got  {}",
+                            func.arity(),
+                            expr.args.len()
+                        ),
+                    });
+                }
+                func.call(self, arguments)
+            }
+
+            Value::Class(class) => {
+                let instance = LoxInstance::new(class.clone());
+                Ok(Value::Instance(instance))
+            }
+            _ => Err(RuntimeError {
+                token: Some(expr.paren.clone()),
+                message: format!("can call only callables"),
+            }),
+        }
+    }
+
     pub fn execute_block(
         &mut self,
         stmts: &[Stmt],
@@ -97,192 +343,6 @@ impl Interpreter {
         }
         self.environment = previous;
         Ok(())
-    }
-
-    fn execute(&mut self, stmt: &Stmt) -> std::result::Result<(), ControlFlow> {
-        match stmt {
-            Stmt::Var(stmt) => {
-                let value = self.evaluate(&stmt.initializer)?;
-                self.environment.borrow_mut().define(&stmt.name, value)?;
-            }
-            Stmt::Print(expr) => {
-                let value = self.evaluate(expr)?;
-                println!("{value}");
-            }
-            Stmt::Expression(expr) => {
-                self.evaluate(expr)?;
-            }
-            Stmt::Block(stmts) => {
-                self.execute_block(
-                    stmts,
-                    Environment::new_with_env(Rc::clone(&self.environment)),
-                )?;
-            }
-            Stmt::If(stmt) => {
-                let value = self.evaluate(&stmt.condition)?;
-                if is_truthy(&value) {
-                    self.execute(&stmt.then_branch)?;
-                } else if let Some(stmt) = &stmt.else_branch {
-                    self.execute(&stmt)?
-                }
-            }
-            Stmt::While(stmt) => {
-                let mut value = self.evaluate(&stmt.condition)?;
-                while is_truthy(&value) {
-                    match self.execute(&stmt.body) {
-                        Err(ControlFlow::Break) => break,
-                        Err(ControlFlow::Return(v)) => return Err(ControlFlow::Return(v)),
-                        Err(ControlFlow::Error(e)) => return Err(ControlFlow::Error(e)),
-                        Ok(_) => {}
-                    }
-                    value = self.evaluate(&stmt.condition)?;
-                }
-            }
-            Stmt::Func(stmt) => {
-                let func = LoxFunction::new(stmt.clone(), Rc::clone(&self.environment));
-                self.environment
-                    .borrow_mut()
-                    .define(&stmt.name, Value::Callable(Rc::new(func)))?;
-            }
-            Stmt::Class(stmt) => {
-                self.environment
-                    .borrow_mut()
-                    .define(&stmt.name, Value::Nil)?;
-
-                let mut methods: HashMap<String, Rc<LoxFunction>> = HashMap::new();
-                for method in &stmt.methods {
-                    let func = LoxFunction::new(method.clone(), Rc::clone(&self.environment));
-                    methods.insert(method.name.lexeme().into(), Rc::new(func));
-                }
-
-                let class = LoxClass::new(&stmt.name.lexeme(), methods);
-                self.environment
-                    .borrow_mut()
-                    .assign(&stmt.name, Value::Class(Rc::new(class)))?;
-            }
-            Stmt::Return(stmt) => {
-                let mut v = Value::Nil;
-                if !matches!(&stmt.value.kind, ExprKind::Literal(Literal::Nil)) {
-                    v = self.evaluate(&stmt.value)?;
-                }
-                return Err(ControlFlow::Return(v));
-            }
-            Stmt::Break => return Err(ControlFlow::Break),
-        }
-        Ok(())
-    }
-
-    fn evaluate(&mut self, expr: &Expr) -> RuntimeResult<Value> {
-        match &expr.kind {
-            ExprKind::Literal(l) => literal(l),
-            ExprKind::Grouping(g) => self.evaluate(g),
-            ExprKind::Var(t) => {
-                if let Some(&distance) = self.locals.get(&expr.id) {
-                    Environment::get_at(self.environment.clone(), distance, t)
-                } else {
-                    self.globals.borrow().get(t)
-                }
-            }
-            ExprKind::Unary(expr) => {
-                let value = self.evaluate(&expr.right)?;
-                unary(&expr.operator, value)
-            }
-            ExprKind::Binary(expr) => {
-                let v_left = self.evaluate(&expr.left)?;
-                let v_right = self.evaluate(&expr.right)?;
-                binary(&expr.operator, v_left, &v_right)
-            }
-            ExprKind::Logical(expr) => {
-                let v_left = self.evaluate(&expr.left)?;
-                if &expr.operator.token_type() == &TokenType::Or {
-                    if is_truthy(&v_left) {
-                        return Ok(v_left);
-                    }
-                } else {
-                    if !is_truthy(&v_left) {
-                        return Ok(v_left);
-                    }
-                }
-                self.evaluate(&expr.right)
-            }
-            ExprKind::Conditional(expr) => {
-                let v_condition = self.evaluate(&expr.condition)?;
-                if is_truthy(&v_condition) {
-                    self.evaluate(&expr.then_branch)
-                } else {
-                    self.evaluate(&expr.else_branch)
-                }
-            }
-            ExprKind::Assignment(e) => {
-                let v = self.evaluate(&e.value)?;
-                if let Some(&distance) = self.locals.get(&expr.id) {
-                    Environment::assign_at(self.environment.clone(), &e.name, v.clone(), distance)?;
-                } else {
-                    self.globals.borrow_mut().assign(&e.name, v.clone())?;
-                }
-                Ok(v)
-            }
-            ExprKind::Get(expr) => {
-                let v = self.evaluate(&expr.object)?;
-
-                if let Value::Instance(instance) = &v {
-                    let v = instance.get(&expr.name)?;
-                    return Ok(v);
-                }
-                Err(RuntimeError {
-                    token: Some(expr.name.clone()),
-                    message: format!("only instances have methods"),
-                })
-            }
-
-            ExprKind::Set(expr) => {
-                let mut v = self.evaluate(&expr.object)?;
-                if let Value::Instance(instance) = &mut v {
-                    let _v = self.evaluate(&expr.value)?;
-                    instance.set(expr.name.clone(), _v.clone())?;
-                    return Ok(_v);
-                }
-
-                Err(RuntimeError {
-                    token: Some(expr.name.clone()),
-                    message: format!("only instances have fields"),
-                })
-            }
-
-            ExprKind::Call(expr) => {
-                let callee = self.evaluate(&expr.callee)?;
-                let mut arguments = Vec::new();
-
-                for arg in &expr.args {
-                    arguments.push(self.evaluate(&arg)?);
-                }
-
-                match callee {
-                    Value::Callable(func) => {
-                        if expr.args.len() != func.arity() {
-                            return Err(RuntimeError {
-                                token: Some(expr.paren.clone()),
-                                message: format!(
-                                    "expected {} arguments, got  {}",
-                                    func.arity(),
-                                    expr.args.len()
-                                ),
-                            });
-                        }
-                        func.call(self, arguments)
-                    }
-
-                    Value::Class(class) => {
-                        let instance = LoxInstance::new(class.clone());
-                        Ok(Value::Instance(instance))
-                    }
-                    _ => Err(RuntimeError {
-                        token: Some(expr.paren.clone()),
-                        message: format!("can call only callables"),
-                    }),
-                }
-            }
-        }
     }
 
     pub fn resolve(&mut self, expr: &Expr, i: usize) {
