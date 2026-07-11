@@ -1,33 +1,6 @@
-use std::fmt;
+use super::*;
 
 use crate::lexer::{Literal, Token, TokenType};
-use crate::parser::*;
-
-pub type ParseResult<T> = std::result::Result<T, ParseError>;
-
-#[derive(Debug)]
-pub struct ParseError {
-    // token_type: TokenType,
-    pub line: usize,
-    pub message: String,
-}
-
-impl std::error::Error for ParseError {}
-
-impl ParseError {
-    pub fn new(line: usize, message: &str) -> Self {
-        Self {
-            line,
-            message: message.to_string(),
-        }
-    }
-}
-
-impl fmt::Display for ParseError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "line: {} | {}", self.line, self.message)
-    }
-}
 
 pub struct Parser<'a> {
     tokens: &'a [Token],
@@ -343,10 +316,8 @@ impl<'a> Parser<'a> {
                     }))));
                 }
                 _ => {
-                    return Err(ParseError {
-                        // token_type: equals.token_type(),
+                    return Err(ParseError::InvalidAssignmentTarget {
                         line: equals.line(),
-                        message: format!("invalid assigment target"),
                     });
                 }
             }
@@ -534,10 +505,10 @@ impl<'a> Parser<'a> {
             self.consume(TokenType::RParen)?;
             return Ok(self.expr(ExprKind::Grouping(Box::new(expr))));
         }
-        return Err(ParseError {
-            // token_type: self.peek().token_type(),
+
+        return Err(ParseError::UnexpectedToken {
             line: self.peek().line(),
-            message: format!("unexpected token {}", self.peek().token_type()),
+            found: self.peek().token_type(),
         });
     }
 
@@ -546,10 +517,10 @@ impl<'a> Parser<'a> {
             return Ok(self.advance());
         }
 
-        return Err(ParseError {
-            // token_type,
+        return Err(ParseError::ExpectedToken {
             line: self.peek().line(),
-            message: format!("expected {} found {}", token_type, self.peek().token_type()),
+            found: self.peek().token_type(),
+            expected: token_type,
         });
     }
 

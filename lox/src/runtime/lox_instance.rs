@@ -43,6 +43,6 @@ impl LoxInstance {
 
 impl fmt::Display for LoxInstance {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "instance of {}", self.class)
+        write!(f, "instance {}", self.class)
     }
 }

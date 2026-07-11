@@ -1,11 +1,9 @@
-use super::ResolveError;
-use std::collections::HashMap;
-
+use super::*;
 use crate::lexer::{Literal, Token};
 use crate::parser::*;
 use crate::runtime::Interpreter;
 
-pub type ResolveResult<T> = std::result::Result<T, ResolveError>;
+use std::collections::HashMap;
 
 #[derive(Debug)]
 enum FunctionType {
@@ -96,17 +94,11 @@ impl<'a> Resolver<'a> {
     fn resolve_return_smt(&mut self, stmt: &ReturnStmt) -> ResolveResult<()> {
         match self.current_function {
             FunctionType::None => {
-                return Err(ResolveError {
-                    token: Some(stmt.keyword.clone()),
-                    message: "cannot return from top-level code".to_string(),
-                });
+                return Err(ResolveError::ReturnFromTopLevel(stmt.keyword.clone()));
             }
 
             FunctionType::Initializer => {
-                return Err(ResolveError {
-                    token: Some(stmt.keyword.clone()),
-                    message: "cannot return from initializer".to_string(),
-                });
+                return Err(ResolveError::ReturnFromInitializer(stmt.keyword.clone()));
             }
             _ => {}
         }
@@ -133,10 +125,7 @@ impl<'a> Resolver<'a> {
 
             if let ExprKind::Var(expr) = &super_class.kind {
                 if expr.token.lexeme() == stmt.name.lexeme() {
-                    return Err(ResolveError {
-                        token: Some(expr.token.clone()),
-                        message: format!("a class cannot inherit from itself"),
-                    });
+                    return Err(ResolveError::ClassInheritsFromItself(expr.token.clone()));
                 }
                 self.resolve_var_expr(super_class, &expr.token)?;
             }
@@ -155,7 +144,7 @@ impl<'a> Resolver<'a> {
         }
 
         self.end_scope();
-        if let Some(super_class) = &stmt.super_class {
+        if let Some(_) = &stmt.super_class {
             self.end_scope();
         }
         self.current_class = enclosing_class;
@@ -186,17 +175,13 @@ impl<'a> Resolver<'a> {
         super_expr: &SuperExpr,
     ) -> ResolveResult<()> {
         if matches!(self.current_class, ClassType::None) {
-            return Err(ResolveError {
-                token: Some(super_expr.keyword.clone()),
-                message: format!("cannot use super outside a class"),
-            });
+            return Err(ResolveError::SuperOutsideClass(super_expr.keyword.clone()));
         }
 
         if !matches!(self.current_class, ClassType::SubClass) {
-            return Err(ResolveError {
-                token: Some(super_expr.keyword.clone()),
-                message: format!("cannot use super witout a super class"),
-            });
+            return Err(ResolveError::SuperWithoutSuperClass(
+                super_expr.keyword.clone(),
+            ));
         }
 
         self.resolve_local(expression, &super_expr.keyword);
@@ -206,10 +191,7 @@ impl<'a> Resolver<'a> {
     fn resolve_var_expr(&mut self, expression: &Expr, token: &Token) -> ResolveResult<()> {
         if let Some(scope) = self.scopes.last() {
             if scope.get(token.lexeme()).map_or(false, |defined| !defined) {
-                return Err(ResolveError::new(
-                    Some(token.clone()),
-                    "cannot read local variable in its own initializer",
-                ));
+                return Err(ResolveError::ReadLocalInOwnInitializer(token.clone()));
             }
         }
         self.resolve_local(expression, token);
@@ -248,10 +230,7 @@ impl<'a> Resolver<'a> {
 
     fn resolve_this(&mut self, expression: &Expr, keyword: &Token) -> ResolveResult<()> {
         if matches!(self.current_class, ClassType::None) {
-            return Err(ResolveError {
-                token: Some(keyword.clone()),
-                message: format!("cannot use 'this' outside of a class"),
-            });
+            return Err(ResolveError::ThisOutsideClass(keyword.clone()));
         }
         self.resolve_local(expression, keyword);
         Ok(())
@@ -299,10 +278,7 @@ impl<'a> Resolver<'a> {
         }
         let scope = self.scopes.last_mut().unwrap();
         if scope.contains_key(name.lexeme()) {
-            return Err(ResolveError::new(
-                Some(name),
-                "already a varialbe with this name is in the scope",
-            ));
+            return Err(ResolveError::VariableAlreadyInScope(name));
         }
 
         scope.insert(name.lexeme().into(), false);

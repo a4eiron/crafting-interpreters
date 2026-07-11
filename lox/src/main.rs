@@ -1,6 +1,7 @@
 use std::{fs, process::exit};
 
 use lox::Interpreter;
+use lox::LoxError;
 use lox::Parser;
 use lox::Resolver;
 use lox::Scanner;
@@ -19,7 +20,7 @@ fn main() {
     }
 }
 
-fn run_file(path: &str) -> std::result::Result<(), Box<dyn std::error::Error>> {
+fn run_file(path: &str) -> std::result::Result<(), LoxError> {
     let text = fs::read_to_string(path)?;
     let mut scanner = Scanner::new(text.as_str());
     let tokens = scanner.scan_tokens()?;

@@ -1,4 +1,4 @@
-use super::expression::Expr;
+use super::Expr;
 use crate::lexer::Token;
 
 #[derive(Debug, Clone)]

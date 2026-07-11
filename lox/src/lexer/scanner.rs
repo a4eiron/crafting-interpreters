@@ -1,36 +1,4 @@
-use crate::lexer::{Literal, Token, TokenType};
-use std::fmt;
-
-type Result<T> = std::result::Result<T, ScanError>;
-
-#[derive(Debug)]
-pub enum ScanError {
-    UnexpectedChar { line: usize, c: char },
-    UnterminatedStr { line: usize },
-    UnterminatedComment { line: usize },
-    InvalidNumber { line: usize },
-}
-
-impl std::error::Error for ScanError {}
-
-impl fmt::Display for ScanError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::UnexpectedChar { line, c } => {
-                write!(f, "line: {} | Unknown character: {}", line, c)
-            }
-            Self::UnterminatedStr { line } => {
-                write!(f, "line: {} | Non-terminating string", line)
-            }
-            Self::UnterminatedComment { line } => {
-                write!(f, "line: {} | Unterminated Comment", line)
-            }
-            Self::InvalidNumber { line } => {
-                write!(f, "line: {} | InvalidNumber", line)
-            }
-        }
-    }
-}
+use super::*;
 
 pub struct Scanner<'a> {
     source: &'a str,
@@ -51,7 +19,7 @@ impl<'a> Scanner<'a> {
         }
     }
 
-    pub fn scan_tokens(&mut self) -> Result<&[Token]> {
+    pub fn scan_tokens(&mut self) -> ScannerResult<&[Token]> {
         while !self.at_end() {
             self.start = self.current;
             self.scan_token()?;
@@ -63,7 +31,7 @@ impl<'a> Scanner<'a> {
         Ok(&self.tokens)
     }
 
-    fn scan_token(&mut self) -> Result<()> {
+    fn scan_token(&mut self) -> ScannerResult<()> {
         let c = match self.advance() {
             Some(character) => character,
             None => return Ok(()),
@@ -129,7 +97,7 @@ impl<'a> Scanner<'a> {
         self.add_token(token_type);
     }
 
-    fn scan_number(&mut self) -> Result<()> {
+    fn scan_number(&mut self) -> ScannerResult<()> {
         while self.peek().is_some_and(|c| c.is_ascii_digit()) {
             self.advance();
         }
@@ -150,7 +118,7 @@ impl<'a> Scanner<'a> {
         Ok(())
     }
 
-    fn scan_string(&mut self) -> Result<()> {
+    fn scan_string(&mut self) -> ScannerResult<()> {
         while self.peek() != Some('"') && !self.at_end() {
             if self.peek() == Some('\n') {
                 self.line += 1;
@@ -171,7 +139,7 @@ impl<'a> Scanner<'a> {
         Ok(())
     }
 
-    fn scan_slash(&mut self) -> Result<()> {
+    fn scan_slash(&mut self) -> ScannerResult<()> {
         if self.match_char('/') {
             while self.peek() != Some('\n') && !self.at_end() {
                 self.advance();

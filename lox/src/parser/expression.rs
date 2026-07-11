@@ -1,4 +1,4 @@
-use crate::lexer::{Literal, Token, TokenType};
+use crate::lexer::{Literal, Token};
 
 #[derive(Debug, Clone)]
 pub struct UnaryExpr {
