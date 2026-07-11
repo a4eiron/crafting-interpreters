@@ -11,6 +11,7 @@ pub type RuntimeResult<T> = std::result::Result<T, RuntimeError>;
 pub enum ControlFlow {
     Error(RuntimeError),
     Return(Value),
+    Continue,
     Break,
 }
 
@@ -72,6 +73,7 @@ impl Interpreter {
             if let Err(flow) = self.execute(stmt) {
                 match flow {
                     ControlFlow::Break => {}
+                    ControlFlow::Continue => {}
                     ControlFlow::Error(e) => return Err(e),
                     ControlFlow::Return(_) => {}
                 }
@@ -92,6 +94,7 @@ impl Interpreter {
             Stmt::Class(stmt) => self.exec_class(stmt)?,
             Stmt::Return(stmt) => self.exec_return(stmt)?,
             Stmt::Break => return Err(ControlFlow::Break),
+            Stmt::Continue => return Err(ControlFlow::Continue),
         }
         Ok(())
     }
@@ -125,7 +128,7 @@ impl Interpreter {
         if is_truthy(&value) {
             self.execute(&stmt.then_branch)?;
         } else if let Some(stmt) = &stmt.else_branch {
-            self.execute(&stmt)?
+            self.execute(&stmt)?;
         }
         Ok(())
     }
@@ -135,16 +138,21 @@ impl Interpreter {
         while is_truthy(&value) {
             match self.execute(&stmt.body) {
                 Err(ControlFlow::Break) => break,
+                Err(ControlFlow::Continue) => {}
                 Err(ControlFlow::Return(v)) => return Err(ControlFlow::Return(v)),
                 Err(ControlFlow::Error(e)) => return Err(ControlFlow::Error(e)),
                 Ok(_) => {}
             }
+
+            if let Some(expr) = &stmt.increment {
+                self.evaluate(expr)?;
+            }
+
             value = self.evaluate(&stmt.condition)?;
         }
 
         Ok(())
     }
-
     fn exec_func(&mut self, stmt: &FuncStmt) -> std::result::Result<(), ControlFlow> {
         let func = LoxFunction::new(stmt.clone(), Rc::clone(&self.environment), false);
         self.environment

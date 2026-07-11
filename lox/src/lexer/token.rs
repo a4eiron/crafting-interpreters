@@ -39,6 +39,7 @@ pub enum TokenType {
     This,
     Super,
     Break,
+    Continue,
     Func,
 
     Identifier,
@@ -137,6 +138,7 @@ impl fmt::Display for TokenType {
             TokenType::This => "this",
             TokenType::Super => "super",
             TokenType::Break => "break",
+            TokenType::Continue => "continue",
             TokenType::Func => "func",
 
             TokenType::Identifier => "identifier",

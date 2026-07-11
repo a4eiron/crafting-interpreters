@@ -60,6 +60,8 @@ impl<'a> Parser<'a> {
             self.print_stmt()
         } else if self.match_token(&[TokenType::Break]) {
             self.break_stmt()
+        } else if self.match_token(&[TokenType::Continue]) {
+            self.continue_stmt()
         } else if self.match_token(&[TokenType::Return]) {
             self.return_stmt()
         } else if self.match_token(&[TokenType::For]) {
@@ -76,6 +78,11 @@ impl<'a> Parser<'a> {
     fn break_stmt(&mut self) -> ParseResult<Stmt> {
         self.consume(TokenType::Semicolon)?;
         Ok(Stmt::Break)
+    }
+
+    fn continue_stmt(&mut self) -> ParseResult<Stmt> {
+        self.consume(TokenType::Semicolon)?;
+        Ok(Stmt::Continue)
     }
 
     fn return_stmt(&mut self) -> ParseResult<Stmt> {
@@ -115,24 +122,25 @@ impl<'a> Parser<'a> {
         }
         self.consume(TokenType::RParen)?;
 
-        let mut body = self.statement()?;
+        let mut stmt = self.statement()?;
 
-        if let Some(inc) = increment {
-            body = Stmt::Block(vec![body, Stmt::Expression(inc)]);
-        }
+        // if let Some(inc) = increment {
+        //     body = Stmt::Block(vec![body, Stmt::Expression(inc)]);
+        // }
 
         let condition = condition.unwrap_or(self.expr(ExprKind::Literal(Literal::True)));
 
-        body = Stmt::While(WhileStmt {
+        stmt = Stmt::While(WhileStmt {
             condition: condition,
-            body: Box::new(body),
+            body: Box::new(stmt),
+            increment: increment,
         });
 
         if let Some(init) = initializer {
-            body = Stmt::Block(vec![init, body]);
+            stmt = Stmt::Block(vec![init, stmt]);
         }
 
-        Ok(body)
+        Ok(stmt)
     }
 
     fn while_stmt(&mut self) -> ParseResult<Stmt> {
@@ -144,6 +152,7 @@ impl<'a> Parser<'a> {
         Ok(Stmt::While(WhileStmt {
             condition,
             body: Box::new(body),
+            increment: None,
         }))
     }
 

@@ -18,6 +18,7 @@ pub struct IfStmt {
 pub struct WhileStmt {
     pub condition: Expr,
     pub body: Box<Stmt>,
+    pub increment: Option<Expr>,
 }
 
 #[derive(Debug, Clone)]
@@ -43,6 +44,7 @@ pub struct ClassStmt {
 #[derive(Debug, Clone)]
 pub enum Stmt {
     Break,
+    Continue,
     Print(Expr),
     If(IfStmt),
     Expression(Expr),

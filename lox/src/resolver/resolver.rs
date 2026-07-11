@@ -108,6 +108,9 @@ impl<'a> Resolver<'a> {
     fn resolve_while_stmt(&mut self, stmt: &WhileStmt) -> ResolveResult<()> {
         self.resolve_expr(&stmt.condition)?;
         self.resolve_stmt(&stmt.body)?;
+        if let Some(incr) = &stmt.increment {
+            self.resolve_expr(incr)?;
+        }
         Ok(())
     }
 

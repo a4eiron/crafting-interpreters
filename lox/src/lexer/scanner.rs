@@ -80,6 +80,7 @@ impl<'a> Scanner<'a> {
             "while" => TokenType::While,
             "for" => TokenType::For,
             "break" => TokenType::Break,
+            "continue" => TokenType::Continue,
             "return" => TokenType::Return,
             "and" => TokenType::And,
             "or" => TokenType::Or,

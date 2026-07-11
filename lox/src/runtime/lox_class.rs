@@ -18,8 +18,8 @@ impl LoxClass {
         super_class: Option<Rc<LoxClass>>,
     ) -> Self {
         Self {
-            name: name.to_string(),
-            super_class: super_class,
+            name: name.into(),
+            super_class,
             methods,
         }
     }
