@@ -12,15 +12,7 @@ pub struct LoxClass {
 }
 
 impl LoxClass {
-    pub fn new(name: &str, methods: HashMap<String, Rc<LoxFunction>>) -> Self {
-        Self {
-            name: name.to_string(),
-            super_class: None,
-            methods: methods,
-        }
-    }
-
-    pub fn new_with_super_class(
+    pub fn new(
         name: &str,
         methods: HashMap<String, Rc<LoxFunction>>,
         super_class: Option<Rc<LoxClass>>,

@@ -195,8 +195,7 @@ impl Interpreter {
             methods.insert(method.name.lexeme().into(), Rc::new(func));
         }
 
-        let class =
-            LoxClass::new_with_super_class(stmt.name.lexeme(), methods, super_class.clone());
+        let class = LoxClass::new(stmt.name.lexeme(), methods, super_class.clone());
         // let class = LoxClass::new(&stmt.name.lexeme(), methods);
 
         if super_class.is_some() {
@@ -394,6 +393,16 @@ impl Interpreter {
             Value::Class(class) => {
                 let instance = LoxInstance::new(class.clone());
                 if let Some(init) = class.find_method("init") {
+                    if expr.args.len() != init.arity() {
+                        return Err(RuntimeError {
+                            token: Some(expr.paren.clone()),
+                            message: format!(
+                                "expected {} arguments, got {}",
+                                init.arity(),
+                                expr.args.len(),
+                            ),
+                        });
+                    }
                     let bound = init.bind(instance.clone())?;
                     bound.call(self, arguments)?;
                 }

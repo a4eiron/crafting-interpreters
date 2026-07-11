@@ -45,7 +45,7 @@ impl<'a> Parser<'a> {
         if self.match_token(&[TokenType::Class]) {
             self.class_declaration()
         } else if self.match_token(&[TokenType::Func]) {
-            self.func_declaration("function")
+            self.func_declaration()
         } else if self.match_token(&[TokenType::Var]) {
             self.var_declaration()
         } else {
@@ -193,7 +193,7 @@ impl<'a> Parser<'a> {
 
         let mut methods = Vec::new();
         while !self.check(TokenType::RBrace) && !self.at_end() {
-            if let Stmt::Func(func_stmt) = self.func_declaration("method")? {
+            if let Stmt::Func(func_stmt) = self.func_declaration()? {
                 methods.push(func_stmt);
             }
         }
@@ -207,7 +207,7 @@ impl<'a> Parser<'a> {
         }))
     }
 
-    fn func_declaration(&mut self, kind: &str) -> ParseResult<Stmt> {
+    fn func_declaration(&mut self) -> ParseResult<Stmt> {
         let name = self.consume(TokenType::Identifier)?.clone();
         self.consume(TokenType::LParen)?;
 

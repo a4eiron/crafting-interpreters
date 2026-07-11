@@ -1,18 +1,30 @@
-// class Foo {
-//   init() {
-// 	  print this;
-//   }
-// }
-// 
-// var foo = Foo();
-// foo.init();
+class Vehicle{
+	init() {
+		print "init";
+		// return;
+	}
 
-class Doughnut {
-  cook() {
-    print "Fry until golden brown.";
-  }
+	peep(){
+		print "vehicle peeping";
+	}
 }
 
-class BostonCream < Doughnut {}
+print Vehicle;
+print Vehicle();
 
-BostonCream().cook();
+class Car < Vehicle {
+	init(name) {
+		this.name = name;
+		super.init();
+		print "hi " + name;
+	}
+
+	peep(){
+		super.peep();
+		print "car: Beep Beep";
+	}
+}
+
+print Car("lambo");
+Car("mclaren").peep();
+
