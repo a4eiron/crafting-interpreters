@@ -1,49 +1,18 @@
-var a = "global";
-{
-	func showA() {
-		print a;
-	}
-	print showA;
+// class Foo {
+//   init() {
+// 	  print this;
+//   }
+// }
+// 
+// var foo = Foo();
+// foo.init();
 
-	showA();
-	var a = "block";
-	showA();
+class Doughnut {
+  cook() {
+    print "Fry until golden brown.";
+  }
 }
 
-var i = 1;
-while (i < 10){
-	if (i == 5) {
-		break;
-	}
-	print i;
-	i = i + 1;
-}
+class BostonCream < Doughnut {}
 
-for (var i = 1; i < 5; i = i + 1){
-	print i;
-	break;
-}
-
-print clock;
-
-class Animal {
-	speak() {
-		return;
-	}
-}
-
-print Animal;
-
-var instance = Animal();
-print instance;
-
-
-class Bacon {
-	eat() {
-		print this;
-		print "Crunch crunch crunch!";
-	}
-}
-
-Bacon().eat();
-
+BostonCream().cook();

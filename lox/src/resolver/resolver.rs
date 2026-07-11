@@ -12,6 +12,7 @@ enum FunctionType {
     None,
     Function,
     Method,
+    Initializer,
 }
 
 #[derive(Debug)]
@@ -92,11 +93,21 @@ impl<'a> Resolver<'a> {
     }
 
     fn resolve_return_smt(&mut self, stmt: &ReturnStmt) -> ResolveResult<()> {
-        if matches!(self.current_function, FunctionType::None) {
-            return Err(ResolveError {
-                token: Some(stmt.keyword.clone()),
-                message: "cannot return from top-level code".to_string(),
-            });
+        match self.current_function {
+            FunctionType::None => {
+                return Err(ResolveError {
+                    token: Some(stmt.keyword.clone()),
+                    message: "cannot return from top-level code".to_string(),
+                });
+            }
+
+            FunctionType::Initializer => {
+                return Err(ResolveError {
+                    token: Some(stmt.keyword.clone()),
+                    message: "cannot return from initializer".to_string(),
+                });
+            }
+            _ => {}
         }
         self.resolve_expr(&stmt.value)
     }
@@ -112,12 +123,27 @@ impl<'a> Resolver<'a> {
         self.declare(stmt.name.clone())?;
         self.define(stmt.name.clone());
 
+        if let Some(super_class) = &stmt.super_class {
+            if let ExprKind::Var(expr) = &super_class.kind {
+                if expr.token.lexeme() == stmt.name.lexeme() {
+                    return Err(ResolveError {
+                        token: Some(expr.token.clone()),
+                        message: format!("a class cannot inherit from itself"),
+                    });
+                }
+                self.resolve_var_expr(super_class, &expr.token)?;
+            }
+        }
+
         self.begin_scope();
         if let Some(scope) = self.scopes.last_mut() {
             scope.insert("this".to_string(), true);
         }
         for method in &stmt.methods {
-            let declaration = FunctionType::Method;
+            let mut declaration = FunctionType::Method;
+            if matches!(method.name.lexeme(), "init") {
+                declaration = FunctionType::Initializer;
+            }
             self.resolve_function(method, declaration)?;
         }
 
@@ -129,7 +155,7 @@ impl<'a> Resolver<'a> {
 
     fn resolve_expr(&mut self, expression: &Expr) -> ResolveResult<()> {
         match &expression.kind {
-            ExprKind::Var(token) => self.resolve_var_expr(expression, token),
+            ExprKind::Var(expr) => self.resolve_var_expr(expression, &expr.token),
             ExprKind::Assignment(expr) => self.resolve_assignment_expr(expression, expr),
             ExprKind::Unary(expr) => self.resolve_expr(&expr.right),
             ExprKind::Binary(expr) => self.resolve_binary_expr(expr),

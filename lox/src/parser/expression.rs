@@ -53,6 +53,11 @@ pub struct SetExpr {
     pub value: Expr,
 }
 
+#[derive(Debug, Clone)]
+pub struct VarExpr {
+    pub token: Token,
+}
+
 pub type ExprId = usize;
 
 #[derive(Debug, Clone)]
@@ -63,7 +68,7 @@ pub struct Expr {
 
 #[derive(Debug, Clone)]
 pub enum ExprKind {
-    Var(Token),
+    Var(VarExpr),
     Literal(Literal),
     Grouping(Box<Expr>),
     Unary(Box<UnaryExpr>),

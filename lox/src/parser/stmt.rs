@@ -36,6 +36,7 @@ pub struct ReturnStmt {
 #[derive(Debug, Clone)]
 pub struct ClassStmt {
     pub name: Token,
+    pub super_class: Option<Expr>,
     pub methods: Vec<FuncStmt>,
 }
 

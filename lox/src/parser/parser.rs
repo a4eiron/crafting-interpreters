@@ -208,9 +208,17 @@ impl<'a> Parser<'a> {
 
     fn class_declaration(&mut self) -> ParseResult<Stmt> {
         let name = self.consume(TokenType::Identifier)?.clone();
-        self.consume(TokenType::LBrace)?;
-        let mut methods = Vec::new();
 
+        let super_class = if self.match_token(&[TokenType::Lesser]) {
+            let token = self.consume(TokenType::Identifier)?.clone();
+            Some(self.expr(ExprKind::Var(VarExpr { token })))
+        } else {
+            None
+        };
+
+        self.consume(TokenType::LBrace)?;
+
+        let mut methods = Vec::new();
         while !self.check(TokenType::RBrace) && !self.at_end() {
             if let Stmt::Func(func_stmt) = self.func_declaration("method")? {
                 methods.push(func_stmt);
@@ -221,6 +229,7 @@ impl<'a> Parser<'a> {
 
         Ok(Stmt::Class(ClassStmt {
             name: name,
+            super_class,
             methods,
         }))
     }
@@ -327,9 +336,9 @@ impl<'a> Parser<'a> {
                         value: value,
                     }))));
                 }
-                ExprKind::Var(token) => {
+                ExprKind::Var(var_expr) => {
                     return Ok(self.expr(ExprKind::Assignment(Box::new(AssignmentExpr {
-                        name: token,
+                        name: var_expr.token,
                         value: value,
                     }))));
                 }
@@ -515,7 +524,8 @@ impl<'a> Parser<'a> {
         }
 
         if self.match_token(&[TokenType::Identifier]) {
-            return Ok(self.expr(ExprKind::Var(self.previous().clone())));
+            let token = self.previous().clone();
+            return Ok(self.expr(ExprKind::Var(VarExpr { token })));
         }
 
         if self.match_token(&[TokenType::LParen]) {

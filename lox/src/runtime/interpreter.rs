@@ -146,7 +146,7 @@ impl Interpreter {
     }
 
     fn exec_func(&mut self, stmt: &FuncStmt) -> std::result::Result<(), ControlFlow> {
-        let func = LoxFunction::new(stmt.clone(), Rc::clone(&self.environment));
+        let func = LoxFunction::new(stmt.clone(), Rc::clone(&self.environment), false);
         self.environment
             .borrow_mut()
             .define(&stmt.name, Value::Callable(Rc::new(func)))?;
@@ -154,17 +154,36 @@ impl Interpreter {
     }
 
     fn exec_class(&mut self, stmt: &ClassStmt) -> std::result::Result<(), ControlFlow> {
+        let super_class = if let Some(super_expr) = &stmt.super_class {
+            match self.evaluate(super_expr)? {
+                Value::Class(class) => Some(class),
+                _ => {
+                    let token = match &super_expr.kind {
+                        ExprKind::Var(var) => &var.token,
+                        _ => unreachable!(),
+                    };
+
+                    return Err(ControlFlow::Error(RuntimeError {
+                        token: Some(token.clone()),
+                        message: "super class must be a class.".to_string(),
+                    }));
+                }
+            }
+        } else {
+            None
+        };
         self.environment
             .borrow_mut()
             .define(&stmt.name, Value::Nil)?;
 
         let mut methods: HashMap<String, Rc<LoxFunction>> = HashMap::new();
         for method in &stmt.methods {
-            let func = LoxFunction::new(method.clone(), Rc::clone(&self.environment));
+            let func = LoxFunction::new(method.clone(), Rc::clone(&self.environment), true);
             methods.insert(method.name.lexeme().into(), Rc::new(func));
         }
 
-        let class = LoxClass::new(&stmt.name.lexeme(), methods);
+        let class = LoxClass::new_with_super_class(stmt.name.lexeme(), methods, super_class);
+        // let class = LoxClass::new(&stmt.name.lexeme(), methods);
         self.environment
             .borrow_mut()
             .assign(&stmt.name, Value::Class(Rc::new(class)))?;
@@ -184,7 +203,7 @@ impl Interpreter {
         match &expression.kind {
             ExprKind::Literal(l) => literal(l),
             ExprKind::Grouping(g) => self.evaluate(g),
-            ExprKind::Var(token) => self.eval_var(token, expression),
+            ExprKind::Var(expr) => self.eval_var(&expr.token, expression),
             ExprKind::Unary(expr) => self.eval_unary(expr),
             ExprKind::Binary(expr) => self.eval_binary(expr),
             ExprKind::Logical(expr) => self.eval_logical(expr),
@@ -318,8 +337,15 @@ impl Interpreter {
                 func.call(self, arguments)
             }
 
+            /////////////////////////////////////////////////
+            // constructor                             //////
+            // //////////////////////////////////////////////
             Value::Class(class) => {
                 let instance = LoxInstance::new(class.clone());
+                if let Some(init) = class.find_method("init") {
+                    let bound = init.bind(instance.clone())?;
+                    bound.call(self, arguments)?;
+                }
                 Ok(Value::Instance(instance))
             }
             _ => Err(RuntimeError {
