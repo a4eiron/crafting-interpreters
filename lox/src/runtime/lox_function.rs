@@ -1,9 +1,9 @@
+use super::{Callable, ControlFlow, Environment, LoxInstance, RuntimeResult, Value};
+use crate::lexer::{Token, TokenType};
+use crate::parser::FuncStmt;
+
 use std::fmt;
 use std::{cell::RefCell, rc::Rc};
-
-use crate::lexer::{Token, TokenType};
-use crate::runtime::{Callable, ControlFlow, LoxInstance, RuntimeResult, Value};
-use crate::{parser::FuncStmt, runtime::Environment};
 
 #[derive(Debug, Clone)]
 pub struct LoxFunction {

@@ -1,6 +1,6 @@
+use super::*;
 use crate::lexer::*;
 use crate::parser::*;
-use crate::runtime::*;
 
 use std::collections::HashMap;
 use std::fmt;
@@ -172,21 +172,40 @@ impl Interpreter {
         } else {
             None
         };
+
         self.environment
             .borrow_mut()
             .define(&stmt.name, Value::Nil)?;
 
+        let prev = self.environment.clone();
+
+        if let Some(ref super_class) = super_class {
+            let mut env = Environment::new_with_env(prev.clone());
+            env.define(
+                &Token::new(TokenType::Super, 0, "super".into(), None),
+                Value::Class(super_class.clone()),
+            )?;
+
+            self.environment = Rc::new(RefCell::new(env));
+        }
+
         let mut methods: HashMap<String, Rc<LoxFunction>> = HashMap::new();
         for method in &stmt.methods {
-            let func = LoxFunction::new(method.clone(), Rc::clone(&self.environment), true);
+            let func = LoxFunction::new(method.clone(), self.environment.clone(), true);
             methods.insert(method.name.lexeme().into(), Rc::new(func));
         }
 
-        let class = LoxClass::new_with_super_class(stmt.name.lexeme(), methods, super_class);
+        let class =
+            LoxClass::new_with_super_class(stmt.name.lexeme(), methods, super_class.clone());
         // let class = LoxClass::new(&stmt.name.lexeme(), methods);
+
+        if super_class.is_some() {
+            self.environment = prev;
+        }
         self.environment
             .borrow_mut()
             .assign(&stmt.name, Value::Class(Rc::new(class)))?;
+
         Ok(())
     }
 
@@ -213,6 +232,38 @@ impl Interpreter {
             ExprKind::Set(expr) => self.eval_set(expr),
             ExprKind::Call(expr) => self.eval_call(expr),
             ExprKind::This(token) => self.eval_this(token, expression),
+            ExprKind::Super(super_expr) => self.eval_super(expression, super_expr),
+        }
+    }
+
+    fn eval_super(&mut self, expression: &Expr, super_expr: &SuperExpr) -> RuntimeResult<Value> {
+        let distance = match self.locals.get(&expression.id) {
+            Some(&d) => d,
+            None => return Err(RuntimeError::new("super used outside of class")),
+        };
+
+        let superclass =
+            Environment::get_at(self.environment.clone(), distance, &super_expr.keyword)?;
+
+        let this_token = Token::new(TokenType::This, 0, "this".to_string(), None);
+        let instance = Environment::get_at(self.environment.clone(), distance - 1, &this_token)?;
+
+        let Value::Class(class) = superclass else {
+            return Err(RuntimeError::new("Superclass must be a class"));
+        };
+
+        let Value::Instance(object) = instance else {
+            return Err(RuntimeError::new("super used outside of instance method"));
+        };
+
+        if let Some(method) = class.find_method(&super_expr.method.lexeme()) {
+            let bound_method = method.bind(object)?;
+            Ok(Value::Callable(Rc::new(bound_method)))
+        } else {
+            Err(RuntimeError::new(&format!(
+                "Undefined property '{}' on superclass",
+                super_expr.method.lexeme()
+            )))
         }
     }
 
@@ -244,8 +295,8 @@ impl Interpreter {
     }
 
     fn eval_set(&mut self, expr: &SetExpr) -> RuntimeResult<Value> {
-        let mut v = self.evaluate(&expr.object)?;
-        if let Value::Instance(instance) = &mut v {
+        let v = self.evaluate(&expr.object)?;
+        if let Value::Instance(instance) = &v {
             let _v = self.evaluate(&expr.value)?;
             instance.set(expr.name.clone(), _v.clone())?;
             return Ok(_v);

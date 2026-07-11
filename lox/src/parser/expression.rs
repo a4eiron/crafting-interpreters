@@ -1,4 +1,4 @@
-use crate::lexer::{Literal, Token};
+use crate::lexer::{Literal, Token, TokenType};
 
 #[derive(Debug, Clone)]
 pub struct UnaryExpr {
@@ -58,6 +58,12 @@ pub struct VarExpr {
     pub token: Token,
 }
 
+#[derive(Debug, Clone)]
+pub struct SuperExpr {
+    pub keyword: Token,
+    pub method: Token,
+}
+
 pub type ExprId = usize;
 
 #[derive(Debug, Clone)]
@@ -80,4 +86,5 @@ pub enum ExprKind {
     Get(Box<GetExpr>),
     Set(Box<SetExpr>),
     This(Token),
+    Super(SuperExpr),
 }

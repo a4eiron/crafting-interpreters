@@ -19,6 +19,7 @@ enum FunctionType {
 enum ClassType {
     None,
     Class,
+    SubClass,
 }
 
 pub struct Resolver<'a> {
@@ -119,11 +120,17 @@ impl<'a> Resolver<'a> {
     }
 
     fn resolve_class_stmt(&mut self, stmt: &ClassStmt) -> ResolveResult<()> {
-        let enclosing_class = std::mem::replace(&mut self.current_class, ClassType::Class);
+        let mut enclosing_class = std::mem::replace(&mut self.current_class, ClassType::Class);
         self.declare(stmt.name.clone())?;
         self.define(stmt.name.clone());
 
         if let Some(super_class) = &stmt.super_class {
+            enclosing_class = std::mem::replace(&mut self.current_class, ClassType::SubClass);
+            self.begin_scope();
+
+            let scope = self.scopes.last_mut().unwrap();
+            scope.insert("super".to_string(), true);
+
             if let ExprKind::Var(expr) = &super_class.kind {
                 if expr.token.lexeme() == stmt.name.lexeme() {
                     return Err(ResolveError {
@@ -147,8 +154,11 @@ impl<'a> Resolver<'a> {
             self.resolve_function(method, declaration)?;
         }
 
-        self.current_class = enclosing_class;
         self.end_scope();
+        if let Some(super_class) = &stmt.super_class {
+            self.end_scope();
+        }
+        self.current_class = enclosing_class;
 
         Ok(())
     }
@@ -165,8 +175,32 @@ impl<'a> Resolver<'a> {
             ExprKind::Get(expr) => self.resolve_expr(&expr.object),
             ExprKind::Set(expr) => self.resolve_set_expr(expr),
             ExprKind::This(keyword) => self.resolve_this(expression, keyword),
+            ExprKind::Super(super_expr) => self.resolve_super_expr(expression, super_expr),
             _ => Ok(()),
         }
+    }
+
+    fn resolve_super_expr(
+        &mut self,
+        expression: &Expr,
+        super_expr: &SuperExpr,
+    ) -> ResolveResult<()> {
+        if matches!(self.current_class, ClassType::None) {
+            return Err(ResolveError {
+                token: Some(super_expr.keyword.clone()),
+                message: format!("cannot use super outside a class"),
+            });
+        }
+
+        if !matches!(self.current_class, ClassType::SubClass) {
+            return Err(ResolveError {
+                token: Some(super_expr.keyword.clone()),
+                message: format!("cannot use super witout a super class"),
+            });
+        }
+
+        self.resolve_local(expression, &super_expr.keyword);
+        Ok(())
     }
 
     fn resolve_var_expr(&mut self, expression: &Expr, token: &Token) -> ResolveResult<()> {

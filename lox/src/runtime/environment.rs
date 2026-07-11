@@ -1,11 +1,14 @@
+use super::{RuntimeError, RuntimeResult, Value};
 use crate::lexer::Token;
-use crate::runtime::{RuntimeError, RuntimeResult, Value};
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::rc::Rc;
 
 #[derive(Debug, Clone)]
 pub struct Environment {
     values: HashMap<String, Value>,
-    enclosing: Option<Rc<RefCell<Environment>>>,
+    pub enclosing: Option<Rc<RefCell<Environment>>>,
 }
 
 impl Environment {
@@ -22,6 +25,7 @@ impl Environment {
             enclosing: Some(enclosing),
         }
     }
+
     pub fn define(&mut self, name: &Token, value: Value) -> RuntimeResult<()> {
         if self.values.contains_key(name.lexeme()) {
             return Err(RuntimeError {

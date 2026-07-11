@@ -1,5 +1,5 @@
+use super::ControlFlow;
 use crate::lexer::Token;
-use crate::runtime::ControlFlow;
 
 use std::fmt;
 

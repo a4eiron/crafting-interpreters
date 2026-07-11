@@ -329,10 +329,10 @@ impl<'a> Parser<'a> {
             let value = self.assignment()?;
 
             match expr.kind {
-                ExprKind::Set(set_expr) => {
+                ExprKind::Get(get_expr) => {
                     return Ok(self.expr(ExprKind::Set(Box::new(SetExpr {
-                        object: set_expr.object,
-                        name: set_expr.name,
+                        object: get_expr.object,
+                        name: get_expr.name,
                         value: value,
                     }))));
                 }
@@ -504,36 +504,36 @@ impl<'a> Parser<'a> {
     fn primary(&mut self) -> ParseResult<Expr> {
         if self.match_token(&[TokenType::False]) {
             return Ok(self.expr(ExprKind::Literal(Literal::False)));
-        }
-        if self.match_token(&[TokenType::True]) {
+            // for space
+        } else if self.match_token(&[TokenType::True]) {
             return Ok(self.expr(ExprKind::Literal(Literal::True)));
-        }
-
-        if self.match_token(&[TokenType::Nil]) {
+            //
+        } else if self.match_token(&[TokenType::Nil]) {
             return Ok(self.expr(ExprKind::Literal(Literal::Nil)));
-        }
-
-        if self.match_token(&[TokenType::Number, TokenType::String]) {
+            //
+        } else if self.match_token(&[TokenType::Number, TokenType::String]) {
             if let Some(literal) = self.previous().literal().cloned() {
                 return Ok(self.expr(ExprKind::Literal(literal)));
             }
-        }
-
-        if self.match_token(&[TokenType::This]) {
+            //
+        } else if self.match_token(&[TokenType::This]) {
             return Ok(self.expr(ExprKind::This(self.previous().clone())));
-        }
-
-        if self.match_token(&[TokenType::Identifier]) {
+            //
+        } else if self.match_token(&[TokenType::Super]) {
+            let keyword = self.previous().clone();
+            self.consume(TokenType::Dot)?;
+            let method = self.consume(TokenType::Identifier)?.clone();
+            return Ok(self.expr(ExprKind::Super(SuperExpr { keyword, method })));
+            //
+        } else if self.match_token(&[TokenType::Identifier]) {
             let token = self.previous().clone();
             return Ok(self.expr(ExprKind::Var(VarExpr { token })));
-        }
-
-        if self.match_token(&[TokenType::LParen]) {
+            //
+        } else if self.match_token(&[TokenType::LParen]) {
             let expr = self.expression()?;
             self.consume(TokenType::RParen)?;
             return Ok(self.expr(ExprKind::Grouping(Box::new(expr))));
         }
-
         return Err(ParseError {
             // token_type: self.peek().token_type(),
             line: self.peek().line(),
