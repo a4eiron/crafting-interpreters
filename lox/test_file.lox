@@ -1,13 +1,6 @@
-class Math {
-	class me() {
-		print "Math";
-	}
-
-	class add(a, b) {
-		return a + b;
-	}
+func echo(n) {
+  print n;
+  return n;
 }
 
-Math.me();
-
-print Math.add(1, 2);
+print echo(echo(1) + echo(2)) + echo(echo(4) + echo(5));
