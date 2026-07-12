@@ -67,7 +67,7 @@ impl<'a> Scanner<'a> {
     }
 
     fn scan_identifier(&mut self) {
-        while self.peek().is_some_and(|c| c.is_alphanumeric()) {
+        while self.peek().is_some_and(|c| c.is_alphanumeric() || c == '_') {
             self.advance();
         }
 

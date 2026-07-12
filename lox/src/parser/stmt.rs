@@ -38,6 +38,7 @@ pub struct ReturnStmt {
 pub struct ClassStmt {
     pub name: Token,
     pub super_class: Option<Expr>,
+    pub class_methods: Vec<FuncStmt>,
     pub methods: Vec<FuncStmt>,
 }
 

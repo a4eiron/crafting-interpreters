@@ -201,18 +201,27 @@ impl<'a> Parser<'a> {
         self.consume(TokenType::LBrace)?;
 
         let mut methods = Vec::new();
+        let mut class_methods = Vec::new();
+
         while !self.check(TokenType::RBrace) && !self.at_end() {
-            if let Stmt::Func(func_stmt) = self.func_declaration()? {
-                methods.push(func_stmt);
+            if self.match_token(&[TokenType::Class]) {
+                if let Stmt::Func(class_func) = self.func_declaration()? {
+                    class_methods.push(class_func);
+                }
+            } else {
+                if let Stmt::Func(func_stmt) = self.func_declaration()? {
+                    methods.push(func_stmt);
+                }
             }
         }
 
         self.consume(TokenType::RBrace)?;
 
         Ok(Stmt::Class(ClassStmt {
-            name: name,
+            name,
             super_class,
             methods,
+            class_methods,
         }))
     }
 

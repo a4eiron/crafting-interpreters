@@ -10,6 +10,7 @@ enum FunctionType {
     None,
     Function,
     Method,
+    ClassMethod,
     Initializer,
 }
 
@@ -132,6 +133,10 @@ impl<'a> Resolver<'a> {
                 }
                 self.resolve_var_expr(super_class, &expr.token)?;
             }
+        }
+
+        for class_method in &stmt.class_methods {
+            self.resolve_function(class_method, FunctionType::ClassMethod)?;
         }
 
         self.begin_scope();

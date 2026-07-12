@@ -25,6 +25,9 @@ fn run_file(path: &str) -> std::result::Result<(), LoxError> {
     let mut scanner = Scanner::new(text.as_str());
     let tokens = scanner.scan_tokens()?;
 
+    // for token in tokens.iter() {
+    //     println!("{:?}", token);
+    // }
     let mut parser = Parser::new(tokens);
     let stmts = parser.parse()?;
 
@@ -35,10 +38,5 @@ fn run_file(path: &str) -> std::result::Result<(), LoxError> {
 
     interpreter.interpret(&stmts)?;
 
-    // print!("{expr:#?}");
-
-    // for token in tokens.iter() {
-    //     println!("{:?}", token);
-    // }
     Ok(())
 }

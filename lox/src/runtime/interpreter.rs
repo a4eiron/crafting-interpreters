@@ -203,7 +203,18 @@ impl Interpreter {
             methods.insert(method.name.lexeme().into(), Rc::new(func));
         }
 
-        let class = LoxClass::new(stmt.name.lexeme(), methods, super_class.clone());
+        let mut class_methods: HashMap<String, Rc<LoxFunction>> = HashMap::new();
+        for class_method in &stmt.class_methods {
+            let func = LoxFunction::new(class_method.clone(), self.environment.clone(), false);
+            class_methods.insert(class_method.name.lexeme().into(), Rc::new(func));
+        }
+
+        let class = LoxClass::new(
+            stmt.name.lexeme(),
+            methods,
+            super_class.clone(),
+            class_methods,
+        );
         // let class = LoxClass::new(&stmt.name.lexeme(), methods);
 
         if super_class.is_some() {
@@ -318,14 +329,25 @@ impl Interpreter {
     fn eval_get(&mut self, expr: &GetExpr) -> RuntimeResult<Value> {
         let v = self.evaluate(&expr.object)?;
 
-        if let Value::Instance(instance) = &v {
-            let v = instance.get(&expr.name)?;
-            return Ok(v);
+        match &v {
+            Value::Instance(instance) => {
+                let prop = instance.get(&expr.name)?;
+                return Ok(prop);
+            }
+            Value::Class(class) => {
+                if let Some(class_method) = class.find_class_method(&expr.name.lexeme()) {
+                    return Ok(Value::Callable(class_method));
+                }
+                Err(RuntimeError {
+                    token: Some(expr.name.clone()),
+                    message: format!("undefined class method {}", expr.name.lexeme()),
+                })
+            }
+            _ => Err(RuntimeError {
+                token: Some(expr.name.clone()),
+                message: format!("only classes and instances have properties"),
+            }),
         }
-        Err(RuntimeError {
-            token: Some(expr.name.clone()),
-            message: format!("only instances have methods"),
-        })
     }
 
     fn eval_assigment(
