@@ -4,6 +4,7 @@ use crate::parser::*;
 
 use std::collections::HashMap;
 use std::fmt;
+use std::vec;
 use std::{cell::RefCell, rc::Rc};
 
 pub type RuntimeResult<T> = std::result::Result<T, RuntimeError>;
@@ -330,10 +331,17 @@ impl Interpreter {
         let v = self.evaluate(&expr.object)?;
 
         match &v {
-            Value::Instance(instance) => {
-                let prop = instance.get(&expr.name)?;
-                return Ok(prop);
-            }
+            Value::Instance(instance) => match instance.get(&expr.name)? {
+                PropResult::Getter(getter) => {
+                    let bound = getter.bind(instance.clone())?;
+                    bound.call(self, vec![])
+                }
+                PropResult::Method(method) => {
+                    let bound = method.bind(instance.clone())?;
+                    Ok(Value::Callable(Rc::new(bound)))
+                }
+                PropResult::Value(value) => Ok(value),
+            },
             Value::Class(class) => {
                 if let Some(class_method) = class.find_class_method(&expr.name.lexeme()) {
                     return Ok(Value::Callable(class_method));

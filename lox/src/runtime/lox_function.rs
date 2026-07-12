@@ -44,6 +44,10 @@ impl LoxFunction {
             closure: Rc::new(RefCell::new(env)),
         })
     }
+
+    pub fn is_getter(&self) -> bool {
+        self.declaration.getter
+    }
 }
 
 impl Callable for LoxFunction {

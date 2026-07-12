@@ -1,6 +1,29 @@
-func echo(n) {
-  print n;
-  return n;
+class Vehicle {
+	init(owner){
+		this.owner = owner;
+	}
+
+	// getter
+	owner {
+		return this.owner;
+	}
+
+	beep(){
+		print "Beep Beep";
+	}
 }
 
-print echo(echo(1) + echo(2)) + echo(echo(4) + echo(5));
+print Vehicle;
+
+class Car < Vehicle{
+	vroom(){
+		print "Vroom Vroom";
+	}
+}
+
+print Car;
+
+var car = Car("a4");
+print "owner: " + car.owner;
+car.vroom();
+

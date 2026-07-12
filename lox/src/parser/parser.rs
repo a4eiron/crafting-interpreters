@@ -227,21 +227,25 @@ impl<'a> Parser<'a> {
 
     fn func_declaration(&mut self) -> ParseResult<Stmt> {
         let name = self.consume(TokenType::Identifier)?.clone();
-        self.consume(TokenType::LParen)?;
 
         let mut args = Vec::new();
+        let mut getter = false;
 
-        if !self.check(TokenType::RParen) {
-            let mut t = true;
-            while t {
-                args.push(self.consume(TokenType::Identifier)?.clone());
-                if !self.match_token(&[TokenType::Comma]) {
-                    t = false;
+        if self.match_token(&[TokenType::LParen]) {
+            if !self.check(TokenType::RParen) {
+                let mut t = true;
+                while t {
+                    args.push(self.consume(TokenType::Identifier)?.clone());
+                    if !self.match_token(&[TokenType::Comma]) {
+                        t = false;
+                    }
                 }
             }
+            self.consume(TokenType::RParen)?;
+        } else {
+            getter = true;
         }
 
-        self.consume(TokenType::RParen)?;
         self.consume(TokenType::LBrace)?;
         let body = self.block()?;
 
@@ -249,6 +253,7 @@ impl<'a> Parser<'a> {
             name,
             params: args,
             body,
+            getter,
         }))
     }
 

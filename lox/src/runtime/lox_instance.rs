@@ -1,4 +1,4 @@
-use super::{LoxClass, RuntimeError, RuntimeResult, Value};
+use super::{LoxClass, LoxFunction, RuntimeError, RuntimeResult, Value};
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -6,6 +6,12 @@ use std::fmt;
 use std::rc::Rc;
 
 use crate::lexer::Token;
+
+pub enum PropResult {
+    Value(Value),
+    Method(Rc<LoxFunction>),
+    Getter(Rc<LoxFunction>),
+}
 
 #[derive(Debug, Clone)]
 pub struct LoxInstance {
@@ -21,13 +27,16 @@ impl LoxInstance {
         }
     }
 
-    pub fn get(&self, name: &Token) -> RuntimeResult<Value> {
+    pub fn get(&self, name: &Token) -> RuntimeResult<PropResult> {
         if let Some(value) = self.fields.borrow().get(name.lexeme()) {
-            return Ok(value.clone());
+            return Ok(PropResult::Value(value.clone()));
         }
         if let Some(method) = self.class.find_method(name.lexeme()) {
-            let bound = method.bind(self.clone())?;
-            return Ok(Value::Callable(Rc::new(bound)));
+            if method.is_getter() {
+                return Ok(PropResult::Getter(method));
+            } else {
+                return Ok(PropResult::Method(method));
+            }
         }
 
         Err(RuntimeError {
