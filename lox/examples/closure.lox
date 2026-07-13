@@ -1,0 +1,34 @@
+fun counter() {
+
+    var n = 0;
+
+    fun inc() {
+        n = n + 1;
+        print n;
+    }
+
+    return inc;
+}
+
+var c = counter();
+
+c();
+c();
+c();
+
+
+var x = "global";
+
+fun outer() {
+
+    var x = "local";
+
+    fun inner() {
+        print x;
+    }
+
+    return inner;
+}
+
+var f = outer();
+f();

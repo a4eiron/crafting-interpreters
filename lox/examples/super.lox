@@ -1,0 +1,16 @@
+class A {
+
+    hello() {
+        print "A";
+    }
+}
+
+class B < A {
+
+    hello() {
+        super.hello();
+        print "B";
+    }
+}
+
+B().hello();

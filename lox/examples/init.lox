@@ -1,0 +1,14 @@
+class Point {
+
+    init(x, y) {
+        this.x = x;
+        this.y = y;
+    }
+
+    printPoint() {
+        print this.x;
+        print this.y;
+    }
+}
+
+Point(3, 4).printPoint();

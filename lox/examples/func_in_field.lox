@@ -1,0 +1,11 @@
+class Foo {
+    speak() {
+        print "hi";
+    }
+}
+
+var f = Foo();
+
+var g = f.speak;
+
+g();

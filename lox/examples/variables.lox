@@ -1,0 +1,11 @@
+var a = 10;
+print a;
+
+a = 20;
+print a;
+
+var b;
+print b;
+
+b = 50;
+print b;

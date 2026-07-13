@@ -91,7 +91,7 @@ impl<'a> Scanner<'a> {
             "class" => TokenType::Class,
             "this" => TokenType::This,
             "super" => TokenType::Super,
-            "func" => TokenType::Func,
+            "fun" => TokenType::Fun,
             _ => TokenType::Identifier,
         };
 

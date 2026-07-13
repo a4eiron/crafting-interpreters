@@ -1,0 +1,11 @@
+print nil;
+print true;
+print false;
+
+print 0;
+print 42;
+print -100;
+
+print 3.14;
+print "hello";
+print "";

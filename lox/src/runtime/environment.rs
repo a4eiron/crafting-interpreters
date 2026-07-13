@@ -49,7 +49,7 @@ impl Environment {
         if let Some(variable) = self.values.get_mut(name.lexeme()) {
             *variable = value;
             Ok(())
-        } else if let Some(ref mut env) = self.enclosing {
+        } else if let Some(env) = &self.enclosing {
             env.borrow_mut().assign(name, value)
         } else {
             Err(RuntimeError {

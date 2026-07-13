@@ -28,27 +28,17 @@ impl LoxClass {
     }
 
     pub fn find_class_method(&self, name: &str) -> Option<LoxFunction> {
-        match self.class_methods.get(name) {
-            Some(method) => Some(method.clone()),
-            None => {
-                if let Some(super_class) = &self.super_class {
-                    return super_class.find_class_method(name);
-                }
-                None
-            }
-        }
+        self.class_methods
+            .get(name)
+            .cloned()
+            .or_else(|| self.super_class.as_ref()?.find_class_method(name))
     }
 
     pub fn find_method(&self, name: &str) -> Option<LoxFunction> {
-        match self.methods.get(name) {
-            Some(method) => Some(method.clone()),
-            None => {
-                if let Some(super_class) = &self.super_class {
-                    return super_class.find_method(name);
-                }
-                None
-            }
-        }
+        self.methods
+            .get(name)
+            .cloned()
+            .or_else(|| self.super_class.as_ref()?.find_method(name))
     }
 }
 

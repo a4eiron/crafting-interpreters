@@ -1,0 +1,29 @@
+class Person {}
+
+var p = Person();
+
+print p;
+
+
+/////////////////////////
+class Box {}
+
+var b = Box();
+
+b.value = 123;
+
+print b.value;
+
+b.value = 456;
+
+print b.value;
+
+/////////////////////////
+class Dog {
+
+    bark() {
+        print "woof";
+    }
+}
+
+Dog().bark();

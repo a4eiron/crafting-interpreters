@@ -1,0 +1,25 @@
+class Animal {
+    speak() {
+        print "animal";
+    }
+}
+
+class Dog < Animal {
+    speak() {
+        super.speak();
+        print "dog";
+    }
+}
+
+fun repeat(fn, n) {
+    var i = 0;
+
+    while (i < n) {
+        fn();
+        i = i + 1;
+    }
+}
+
+var d = Dog();
+
+repeat(d.speak, 3);

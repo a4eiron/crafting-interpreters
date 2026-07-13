@@ -36,7 +36,7 @@ impl LoxFunction {
             .define_str("this", Value::Instance(instance))?;
 
         Ok(Self {
-            is_initializer: true,
+            is_initializer: self.is_initializer,
             declaration: self.declaration.clone(),
             closure: env,
         })

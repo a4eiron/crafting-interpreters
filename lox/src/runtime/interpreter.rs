@@ -4,7 +4,6 @@ use crate::parser::*;
 
 use std::collections::HashMap;
 use std::fmt;
-use std::vec;
 use std::{cell::RefCell, rc::Rc};
 
 pub type RuntimeResult<T> = std::result::Result<T, RuntimeError>;
@@ -71,13 +70,8 @@ impl Interpreter {
 
     pub fn interpret(&mut self, stmts: &[Stmt]) -> RuntimeResult<()> {
         for stmt in stmts {
-            if let Err(flow) = self.execute(stmt) {
-                match flow {
-                    ControlFlow::Break => {}
-                    ControlFlow::Continue => {}
-                    ControlFlow::Error(e) => return Err(e),
-                    ControlFlow::Return(_) => {}
-                }
+            if let Err(ControlFlow::Error(e)) = self.execute(stmt) {
+                return Err(e);
             }
         }
         Ok(())
@@ -91,7 +85,7 @@ impl Interpreter {
             Stmt::Block(stmts) => self.exec_block(stmts)?,
             Stmt::If(stmt) => self.exec_if(stmt)?,
             Stmt::While(stmt) => self.exec_while(stmt)?,
-            Stmt::Func(stmt) => self.exec_func(stmt)?,
+            Stmt::Function(stmt) => self.exec_func(stmt)?,
             Stmt::Class(stmt) => self.exec_class(stmt)?,
             Stmt::Return(stmt) => self.exec_return(stmt)?,
             Stmt::Break => return Err(ControlFlow::Break),
@@ -138,11 +132,9 @@ impl Interpreter {
         let mut value = self.evaluate(&stmt.condition)?;
         while is_truthy(&value) {
             match self.execute(&stmt.body) {
+                Ok(_) | Err(ControlFlow::Continue) => {}
                 Err(ControlFlow::Break) => break,
-                Err(ControlFlow::Continue) => {}
-                Err(ControlFlow::Return(v)) => return Err(ControlFlow::Return(v)),
-                Err(ControlFlow::Error(e)) => return Err(ControlFlow::Error(e)),
-                Ok(_) => {}
+                Err(e) => return Err(e),
             }
 
             if let Some(expr) = &stmt.increment {
@@ -187,39 +179,23 @@ impl Interpreter {
             .define(&stmt.name, Value::Nil)?;
 
         let prev = self.environment.clone();
-
-        if let Some(ref super_class) = super_class {
+        if let Some(super_class) = &super_class {
             let env = Environment::new_with_env(prev.clone());
             env.borrow_mut()
                 .define_str("super", Value::Class(super_class.clone()))?;
             self.environment = env;
         }
+        let methods = build_methods(&stmt.methods, &self.environment, |m| {
+            m.name.lexeme() == "init"
+        });
+        let class_methods = build_methods(&stmt.class_methods, &self.environment, |_| false);
 
-        let mut methods: HashMap<String, LoxFunction> = HashMap::new();
-        for method in &stmt.methods {
-            let func = LoxFunction::new(Rc::new(method.clone()), self.environment.clone(), true);
-            methods.insert(method.name.lexeme().into(), func);
-        }
-
-        let mut class_methods: HashMap<String, LoxFunction> = HashMap::new();
-        for class_method in &stmt.class_methods {
-            let func = LoxFunction::new(
-                Rc::new(class_method.clone()),
-                self.environment.clone(),
-                false,
-            );
-            class_methods.insert(class_method.name.lexeme().into(), func);
-        }
-
-        let class = LoxClass::new(
-            stmt.name.lexeme(),
-            methods,
-            super_class.clone(),
-            class_methods,
-        );
-        if super_class.is_some() {
+        let has_super = super_class.is_some();
+        let class = LoxClass::new(stmt.name.lexeme(), methods, super_class, class_methods);
+        if has_super {
             self.environment = prev;
         }
+
         self.environment
             .borrow_mut()
             .assign(&stmt.name, Value::Class(Rc::new(class)))?;
@@ -228,10 +204,7 @@ impl Interpreter {
     }
 
     fn exec_return(&mut self, stmt: &ReturnStmt) -> std::result::Result<(), ControlFlow> {
-        let mut v = Value::Nil;
-        if !matches!(&stmt.value.kind, ExprKind::Literal(Literal::Nil)) {
-            v = self.evaluate(&stmt.value)?;
-        }
+        let v = self.evaluate(&stmt.value)?;
         return Err(ControlFlow::Return(v));
     }
 
@@ -240,18 +213,18 @@ impl Interpreter {
         match &expression.kind {
             ExprKind::Literal(l) => literal(l),
             ExprKind::Grouping(g) => self.evaluate(g),
-            ExprKind::Var(expr) => self.eval_var(&expr.token, expression),
-            ExprKind::Unary(expr) => self.eval_unary(expr),
-            ExprKind::Binary(expr) => self.eval_binary(expr),
-            ExprKind::Logical(expr) => self.eval_logical(expr),
-            ExprKind::Conditional(expr) => self.eval_conditional(expr),
-            ExprKind::Assignment(ass_expr) => self.eval_assigment(expression, ass_expr),
             ExprKind::Get(expr) => self.eval_get(expr),
             ExprKind::Set(expr) => self.eval_set(expr),
             ExprKind::Call(expr) => self.eval_call(expr),
-            ExprKind::This(token) => self.eval_this(token, expression),
-            ExprKind::Super(super_expr) => self.eval_super(expression, super_expr),
+            ExprKind::Unary(expr) => self.eval_unary(expr),
+            ExprKind::Binary(expr) => self.eval_binary(expr),
+            ExprKind::Logical(expr) => self.eval_logical(expr),
             ExprKind::Function(expr) => self.eval_function(expr),
+            ExprKind::Conditional(expr) => self.eval_conditional(expr),
+            ExprKind::This(token) => self.lookup_variable(token, expression),
+            ExprKind::Var(expr) => self.lookup_variable(&expr.token, expression),
+            ExprKind::Super(super_expr) => self.eval_super(expression, super_expr),
+            ExprKind::Assignment(ass_expr) => self.eval_assignment(expression, ass_expr),
         }
     }
 
@@ -275,40 +248,32 @@ impl Interpreter {
     }
 
     fn eval_super(&mut self, expression: &Expr, super_expr: &SuperExpr) -> RuntimeResult<Value> {
-        let distance = match self.locals.get(&expression.id) {
-            Some(&d) => d,
-            None => return Err(RuntimeError::new("super used outside of class")),
-        };
+        let distance = *self
+            .locals
+            .get(&expression.id)
+            .ok_or_else(|| RuntimeError::new("super used outside of class"))?;
 
-        let superclass =
+        let super_class =
             Environment::get_at(self.environment.clone(), distance, &super_expr.keyword)?;
 
         let instance = Environment::get_at_str(self.environment.clone(), distance - 1, "this")?;
 
-        let Value::Class(class) = superclass else {
-            return Err(RuntimeError::new("Superclass must be a class"));
-        };
+        if let (Value::Class(class), Value::Instance(object)) = (super_class, instance) {
+            let method = class
+                .find_method(super_expr.method.lexeme())
+                .ok_or_else(|| {
+                    RuntimeError::new(&format!(
+                        "undefined property '{}' on superclass",
+                        super_expr.method.lexeme()
+                    ))
+                })?;
 
-        let Value::Instance(object) = instance else {
-            return Err(RuntimeError::new("super used outside of instance method"));
-        };
-
-        if let Some(method) = class.find_method(&super_expr.method.lexeme()) {
             let bound_method = method.bind(object)?;
             Ok(Value::Callable(Rc::new(bound_method)))
         } else {
-            Err(RuntimeError::new(&format!(
-                "Undefined property '{}' on superclass",
-                super_expr.method.lexeme()
-            )))
-        }
-    }
-
-    fn eval_var(&mut self, token: &Token, expression: &Expr) -> RuntimeResult<Value> {
-        if let Some(&distance) = self.locals.get(&expression.id) {
-            Environment::get_at(self.environment.clone(), distance, token)
-        } else {
-            self.globals.borrow().get(token)
+            Err(RuntimeError::new(
+                "invalid superclass  or execution context",
+            ))
         }
     }
 
@@ -323,7 +288,7 @@ impl Interpreter {
         binary(&expr.operator, v_left, &v_right)
     }
 
-    fn eval_this(&mut self, token: &Token, expression: &Expr) -> RuntimeResult<Value> {
+    fn lookup_variable(&mut self, token: &Token, expression: &Expr) -> RuntimeResult<Value> {
         if let Some(&distance) = self.locals.get(&expression.id) {
             Environment::get_at(self.environment.clone(), distance, token)
         } else {
@@ -341,7 +306,7 @@ impl Interpreter {
 
         Err(RuntimeError {
             token: Some(expr.name.clone()),
-            message: format!("only instances have fields"),
+            message: "only instances have fields".to_string(),
         })
     }
 
@@ -371,12 +336,12 @@ impl Interpreter {
             }
             _ => Err(RuntimeError {
                 token: Some(expr.name.clone()),
-                message: format!("only classes and instances have properties"),
+                message: "only classes and instances have properties".to_string(),
             }),
         }
     }
 
-    fn eval_assigment(
+    fn eval_assignment(
         &mut self,
         expr: &Expr,
         assignment_expr: &AssignmentExpr,
@@ -408,25 +373,20 @@ impl Interpreter {
 
     fn eval_logical(&mut self, expr: &LogicalExpr) -> RuntimeResult<Value> {
         let v_left = self.evaluate(&expr.left)?;
-        if &expr.operator.token_type() == &TokenType::Or {
-            if is_truthy(&v_left) {
-                return Ok(v_left);
-            }
-        } else {
-            if !is_truthy(&v_left) {
-                return Ok(v_left);
-            }
+        let is_or = expr.operator.token_type() == TokenType::Or;
+        if is_truthy(&v_left) == is_or {
+            return Ok(v_left);
         }
         self.evaluate(&expr.right)
     }
 
     fn eval_call(&mut self, expr: &Call) -> RuntimeResult<Value> {
         let callee = self.evaluate(&expr.callee)?;
-        let mut arguments = Vec::new();
-
-        for arg in &expr.args {
-            arguments.push(self.evaluate(&arg)?);
-        }
+        let arguments = expr
+            .args
+            .iter()
+            .map(|arg| self.evaluate(arg))
+            .collect::<RuntimeResult<_>>()?;
 
         match callee {
             Value::Callable(func) => {
@@ -466,7 +426,7 @@ impl Interpreter {
             }
             _ => Err(RuntimeError {
                 token: Some(expr.paren.clone()),
-                message: format!("can call only callables"),
+                message: "can call only callables".to_string(),
             }),
         }
     }
@@ -531,16 +491,30 @@ fn binary(operator: &Token, left: Value, right: &Value) -> RuntimeResult<Value> 
         TokenType::Slash => left.divide(right),
         TokenType::EqualEqual => left.equal(right),
         TokenType::BangEqual => left.not_equal(right),
-        TokenType::Greater => left.greater(right),
-        TokenType::GreaterEqual => left.greater_equal(right),
         TokenType::Lesser => left.lesser(right),
+        TokenType::Greater => left.greater(right),
         TokenType::LesserEqual => left.lesser_equal(right),
+        TokenType::GreaterEqual => left.greater_equal(right),
         _ => err("unknown operator"),
     }
     .map_err(|mut e| {
         e.token = Some(operator.clone());
         e
     })
+}
+
+fn build_methods(
+    funcs: &[FuncStmt],
+    env: &Rc<RefCell<Environment>>,
+    is_initializer: impl Fn(&FuncStmt) -> bool,
+) -> HashMap<String, LoxFunction> {
+    funcs
+        .iter()
+        .map(|f| {
+            let func = LoxFunction::new(Rc::new(f.clone()), env.clone(), is_initializer(f));
+            (f.name.lexeme().to_string(), func)
+        })
+        .collect()
 }
 
 pub fn is_truthy(value: &Value) -> bool {

@@ -1,0 +1,12 @@
+class Circle {
+
+    init(r) {
+        this.r = r;
+    }
+
+    area {
+        return 3 * this.r * this.r;
+    }
+}
+
+print Circle(4).area;

@@ -49,6 +49,7 @@ impl Value {
             (Value::String(a), Value::String(b)) => Ok(Value::Bool(a == b)),
             (ref a, Value::Bool(b)) => Ok(Value::Bool(is_truthy(a) == *b)),
             (Value::Bool(a), ref b) => Ok(Value::Bool(*a == is_truthy(b))),
+            (Value::Nil, Value::Nil) => Ok(Value::Bool(true)),
             (_, _) => Err(RuntimeError::new("incompatable")),
         }
     }
@@ -101,7 +102,7 @@ impl fmt::Display for Value {
         match self {
             Self::Number(n) => write!(f, "{}", n),
             Self::String(s) => write!(f, "{}", s),
-            Self::Nil => write!(f, "<nil>"),
+            Self::Nil => write!(f, "nil"),
             Self::Bool(b) => write!(f, "{}", b),
             Self::Callable(func) => write!(f, "{}", func),
             Self::Class(class) => write!(f, "{}", class),

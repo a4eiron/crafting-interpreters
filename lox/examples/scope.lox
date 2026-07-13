@@ -1,0 +1,25 @@
+var a = "global";
+
+{
+    print a;
+
+    var a = "local";
+    print a;
+}
+
+print a;
+
+var x = "outer";
+
+{
+    var x = "middle";
+
+    {
+        var x = "inner";
+        print x;
+    }
+
+    print x;
+}
+
+print x;

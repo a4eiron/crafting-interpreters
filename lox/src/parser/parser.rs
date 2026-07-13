@@ -11,7 +11,7 @@ pub struct Parser<'a> {
 impl<'a> Parser<'a> {
     pub fn new(tokens: &'a [Token]) -> Self {
         Self {
-            tokens: tokens,
+            tokens,
             current: 0,
             next_expr_id: 0,
         }
@@ -27,7 +27,7 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse(&mut self) -> ParseResult<Vec<Stmt>> {
-        let mut stmts: Vec<Stmt> = Vec::new();
+        let mut stmts = Vec::new();
 
         while !self.at_end() {
             match self.declaration() {
@@ -44,7 +44,7 @@ impl<'a> Parser<'a> {
     fn declaration(&mut self) -> ParseResult<Stmt> {
         if self.match_token(&[TokenType::Class]) {
             self.class_declaration()
-        } else if self.match_token(&[TokenType::Func]) {
+        } else if self.match_token(&[TokenType::Fun]) {
             self.func_declaration()
         } else if self.match_token(&[TokenType::Var]) {
             self.var_declaration()
@@ -123,11 +123,6 @@ impl<'a> Parser<'a> {
         self.consume(TokenType::RParen)?;
 
         let mut stmt = self.statement()?;
-
-        // if let Some(inc) = increment {
-        //     body = Stmt::Block(vec![body, Stmt::Expression(inc)]);
-        // }
-
         let condition = condition.unwrap_or(self.expr(ExprKind::Literal(Literal::True)));
 
         stmt = Stmt::While(WhileStmt {
@@ -205,11 +200,11 @@ impl<'a> Parser<'a> {
 
         while !self.check(TokenType::RBrace) && !self.at_end() {
             if self.match_token(&[TokenType::Class]) {
-                if let Stmt::Func(class_func) = self.func_declaration()? {
+                if let Stmt::Function(class_func) = self.func_declaration()? {
                     class_methods.push(class_func);
                 }
             } else {
-                if let Stmt::Func(func_stmt) = self.func_declaration()? {
+                if let Stmt::Function(func_stmt) = self.func_declaration()? {
                     methods.push(func_stmt);
                 }
             }
@@ -228,27 +223,16 @@ impl<'a> Parser<'a> {
     fn func_declaration(&mut self) -> ParseResult<Stmt> {
         let name = self.consume(TokenType::Identifier)?.clone();
 
-        let mut params = Vec::new();
-        let mut getter = false;
-
-        if self.match_token(&[TokenType::LParen]) {
-            if !self.check(TokenType::RParen) {
-                loop {
-                    params.push(self.consume(TokenType::Identifier)?.clone());
-                    if !self.match_token(&[TokenType::Comma]) {
-                        break;
-                    }
-                }
-            }
-            self.consume(TokenType::RParen)?;
+        let (params, getter) = if self.match_token(&[TokenType::LParen]) {
+            (self.func_params()?, false)
         } else {
-            getter = true;
-        }
+            (Vec::new(), true)
+        };
 
         self.consume(TokenType::LBrace)?;
         let body = self.block()?;
 
-        Ok(Stmt::Func(FuncStmt {
+        Ok(Stmt::Function(FuncStmt {
             name,
             params,
             body,
@@ -521,7 +505,7 @@ impl<'a> Parser<'a> {
             let token = self.previous().clone();
             return Ok(self.expr(ExprKind::Var(VarExpr { token })));
             //
-        } else if self.match_token(&[TokenType::Func]) {
+        } else if self.match_token(&[TokenType::Fun]) {
             return self.anon_function_expr();
         } else if self.match_token(&[TokenType::LParen]) {
             let expr = self.expression()?;
@@ -536,8 +520,16 @@ impl<'a> Parser<'a> {
 
     fn anon_function_expr(&mut self) -> ParseResult<Expr> {
         self.consume(TokenType::LParen)?;
-        let mut params = Vec::new();
+        let params = self.func_params()?;
 
+        self.consume(TokenType::LBrace)?;
+        let body = self.block()?;
+
+        Ok(self.expr(ExprKind::Function(FunctionExpr { params, body })))
+    }
+
+    fn func_params(&mut self) -> ParseResult<Vec<Token>> {
+        let mut params = Vec::new();
         if !self.check(TokenType::RParen) {
             loop {
                 params.push(self.consume(TokenType::Identifier)?.clone());
@@ -547,10 +539,7 @@ impl<'a> Parser<'a> {
             }
         }
         self.consume(TokenType::RParen)?;
-        self.consume(TokenType::LBrace)?;
-        let body = self.block()?;
-
-        Ok(self.expr(ExprKind::Function(FunctionExpr { params, body })))
+        Ok(params)
     }
 
     fn consume(&mut self, token_type: TokenType) -> ParseResult<&Token> {

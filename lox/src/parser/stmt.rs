@@ -54,6 +54,6 @@ pub enum Stmt {
     While(WhileStmt),
     Return(ReturnStmt),
     Var(VarStmt),
-    Func(FuncStmt),
+    Function(FuncStmt),
     Class(ClassStmt),
 }

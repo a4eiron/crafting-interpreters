@@ -50,7 +50,7 @@ impl<'a> Resolver<'a> {
             Stmt::Block(stmts) => self.resolve_block_stmt(stmts),
             Stmt::Class(stmt) => self.resolve_class_stmt(&stmt),
             Stmt::Expression(expr) => self.resolve_expr(expr),
-            Stmt::Func(stmt) => self.resolve_func_stmt(stmt),
+            Stmt::Function(stmt) => self.resolve_func_stmt(stmt),
             Stmt::If(stmt) => self.resolve_if_stmt(stmt),
             Stmt::Print(expr) => self.resolve_expr(expr),
             Stmt::Return(stmt) => self.resolve_return_smt(stmt),
@@ -60,10 +60,76 @@ impl<'a> Resolver<'a> {
         }
     }
 
+    fn resolve_expr(&mut self, expression: &Expr) -> ResolveResult<()> {
+        match &expression.kind {
+            ExprKind::Assignment(expr) => self.resolve_assignment_expr(expression, expr),
+            ExprKind::Binary(expr) => self.resolve_binary_expr(expr),
+            ExprKind::Call(expr) => self.resolve_call_expr(expr),
+            ExprKind::Function(func_expr) => self.resolve_func_expr(func_expr),
+            ExprKind::Grouping(expr) => self.resolve_expr(&expr),
+            ExprKind::Get(expr) => self.resolve_expr(&expr.object),
+            ExprKind::Logical(expr) => self.resolve_logical_expr(expr),
+            ExprKind::Set(expr) => self.resolve_set_expr(expr),
+            ExprKind::Super(super_expr) => self.resolve_super_expr(expression, super_expr),
+            ExprKind::This(keyword) => self.resolve_this(expression, keyword),
+            ExprKind::Unary(expr) => self.resolve_expr(&expr.right),
+            ExprKind::Var(expr) => self.resolve_var_expr(expression, &expr.token),
+            _ => Ok(()),
+        }
+    }
+
     fn resolve_block_stmt(&mut self, stmts: &[Stmt]) -> ResolveResult<()> {
         self.begin_scope();
         self.resolve(stmts)?;
         self.end_scope();
+        Ok(())
+    }
+
+    fn resolve_class_stmt(&mut self, stmt: &ClassStmt) -> ResolveResult<()> {
+        let enclosing_class = std::mem::replace(&mut self.current_class, ClassType::Class);
+        self.declare(stmt.name.clone())?;
+        self.define(stmt.name.clone());
+
+        if let Some(super_class) = &stmt.super_class {
+            self.current_class = ClassType::SubClass;
+            self.begin_scope();
+            self.scopes
+                .last_mut()
+                .unwrap()
+                .insert("super".to_string(), true);
+
+            if let ExprKind::Var(expr) = &super_class.kind {
+                if expr.token.lexeme() == stmt.name.lexeme() {
+                    return Err(ResolveError::ClassInheritsFromItself(expr.token.clone()));
+                }
+                self.resolve_var_expr(super_class, &expr.token)?;
+            }
+        }
+
+        for class_method in &stmt.class_methods {
+            self.resolve_function(class_method, FunctionType::ClassMethod)?;
+        }
+
+        self.begin_scope();
+        self.scopes
+            .last_mut()
+            .unwrap()
+            .insert("this".to_string(), true);
+
+        for method in &stmt.methods {
+            let declaration = if method.name.lexeme() == "init" {
+                FunctionType::Initializer
+            } else {
+                FunctionType::Method
+            };
+            self.resolve_function(method, declaration)?;
+        }
+        self.end_scope();
+
+        if stmt.super_class.is_some() {
+            self.end_scope();
+        }
+        self.current_class = enclosing_class;
         Ok(())
     }
 
@@ -115,81 +181,8 @@ impl<'a> Resolver<'a> {
         Ok(())
     }
 
-    fn resolve_class_stmt(&mut self, stmt: &ClassStmt) -> ResolveResult<()> {
-        let mut enclosing_class = std::mem::replace(&mut self.current_class, ClassType::Class);
-        self.declare(stmt.name.clone())?;
-        self.define(stmt.name.clone());
-
-        if let Some(super_class) = &stmt.super_class {
-            enclosing_class = std::mem::replace(&mut self.current_class, ClassType::SubClass);
-            self.begin_scope();
-
-            let scope = self.scopes.last_mut().unwrap();
-            scope.insert("super".to_string(), true);
-
-            if let ExprKind::Var(expr) = &super_class.kind {
-                if expr.token.lexeme() == stmt.name.lexeme() {
-                    return Err(ResolveError::ClassInheritsFromItself(expr.token.clone()));
-                }
-                self.resolve_var_expr(super_class, &expr.token)?;
-            }
-        }
-
-        for class_method in &stmt.class_methods {
-            self.resolve_function(class_method, FunctionType::ClassMethod)?;
-        }
-
-        self.begin_scope();
-        if let Some(scope) = self.scopes.last_mut() {
-            scope.insert("this".to_string(), true);
-        }
-        for method in &stmt.methods {
-            let mut declaration = FunctionType::Method;
-            if matches!(method.name.lexeme(), "init") {
-                declaration = FunctionType::Initializer;
-            }
-            self.resolve_function(method, declaration)?;
-        }
-
-        self.end_scope();
-        if let Some(_) = &stmt.super_class {
-            self.end_scope();
-        }
-        self.current_class = enclosing_class;
-
-        Ok(())
-    }
-
-    fn resolve_expr(&mut self, expression: &Expr) -> ResolveResult<()> {
-        match &expression.kind {
-            ExprKind::Var(expr) => self.resolve_var_expr(expression, &expr.token),
-            ExprKind::Assignment(expr) => self.resolve_assignment_expr(expression, expr),
-            ExprKind::Unary(expr) => self.resolve_expr(&expr.right),
-            ExprKind::Binary(expr) => self.resolve_binary_expr(expr),
-            ExprKind::Call(expr) => self.resolve_call_expr(expr),
-            ExprKind::Grouping(expr) => self.resolve_expr(&expr),
-            ExprKind::Logical(expr) => self.resolve_logical_expr(expr),
-            ExprKind::Get(expr) => self.resolve_expr(&expr.object),
-            ExprKind::Set(expr) => self.resolve_set_expr(expr),
-            ExprKind::This(keyword) => self.resolve_this(expression, keyword),
-            ExprKind::Super(super_expr) => self.resolve_super_expr(expression, super_expr),
-            ExprKind::Function(func_expr) => self.resolve_func_expr(func_expr),
-            _ => Ok(()),
-        }
-    }
-
     fn resolve_func_expr(&mut self, func_expr: &FunctionExpr) -> ResolveResult<()> {
-        let enclosing = std::mem::replace(&mut self.current_function, FunctionType::Function);
-
-        self.begin_scope();
-        for param in &func_expr.params {
-            self.declare(param.clone())?;
-            self.define(param.clone());
-        }
-        self.resolve(&func_expr.body)?;
-        self.end_scope();
-        self.current_function = enclosing;
-        Ok(())
+        self.resolve_function_body(&func_expr.params, &func_expr.body, FunctionType::Function)
     }
 
     fn resolve_super_expr(
@@ -258,10 +251,15 @@ impl<'a> Resolver<'a> {
         self.resolve_local(expression, keyword);
         Ok(())
     }
+
     fn resolve_set_expr(&mut self, expr: &SetExpr) -> ResolveResult<()> {
         self.resolve_expr(&expr.value)?;
         self.resolve_expr(&expr.object)?;
         Ok(())
+    }
+
+    fn resolve_function(&mut self, func: &FuncStmt, func_type: FunctionType) -> ResolveResult<()> {
+        self.resolve_function_body(&func.params, &func.body, func_type)
     }
 
     fn resolve_local(&mut self, expression: &Expr, name: &Token) {
@@ -273,15 +271,20 @@ impl<'a> Resolver<'a> {
         }
     }
 
-    fn resolve_function(&mut self, func: &FuncStmt, func_type: FunctionType) -> ResolveResult<()> {
+    fn resolve_function_body(
+        &mut self,
+        params: &[Token],
+        body: &[Stmt],
+        func_type: FunctionType,
+    ) -> ResolveResult<()> {
         let enclosing_function = std::mem::replace(&mut self.current_function, func_type);
         self.begin_scope();
-        for param in &func.params {
+        for param in params {
             self.declare(param.clone())?;
             self.define(param.clone());
         }
 
-        self.resolve(&func.body)?;
+        self.resolve(body)?;
         self.end_scope();
         self.current_function = enclosing_function;
         Ok(())
@@ -312,10 +315,10 @@ impl<'a> Resolver<'a> {
         if self.scopes.is_empty() {
             return;
         }
-
-        let scope = self.scopes.last_mut().unwrap();
-        scope
-            .entry(name.lexeme().to_string())
+        self.scopes
+            .last_mut()
+            .unwrap()
+            .entry(name.lexeme().into())
             .and_modify(|f| *f = true);
     }
 }

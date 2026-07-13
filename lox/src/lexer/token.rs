@@ -40,7 +40,7 @@ pub enum TokenType {
     Super,
     Break,
     Continue,
-    Func,
+    Fun,
 
     Identifier,
     String,
@@ -139,7 +139,7 @@ impl fmt::Display for TokenType {
             TokenType::Super => "super",
             TokenType::Break => "break",
             TokenType::Continue => "continue",
-            TokenType::Func => "func",
+            TokenType::Fun => "fun",
 
             TokenType::Identifier => "identifier",
             TokenType::String => "string",

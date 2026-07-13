@@ -1,0 +1,20 @@
+class Counter {
+
+    init() {
+        this.value = 0;
+    }
+
+    inc() {
+        this.value = this.value + 1;
+    }
+
+    show() {
+        print this.value;
+    }
+}
+
+var c = Counter();
+
+c.show();
+c.inc();
+c.show();

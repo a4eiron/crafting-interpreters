@@ -82,18 +82,18 @@ pub struct Expr {
 
 #[derive(Debug, Clone)]
 pub enum ExprKind {
+    This(Token),
     Var(VarExpr),
     Literal(Literal),
-    Grouping(Box<Expr>),
-    Unary(Box<UnaryExpr>),
-    Binary(Box<BinaryExpr>),
-    Assignment(Box<AssignmentExpr>),
-    Conditional(Box<ConditionalExpr>),
-    Logical(Box<LogicalExpr>),
     Call(Box<Call>),
     Get(Box<GetExpr>),
     Set(Box<SetExpr>),
-    This(Token),
     Super(SuperExpr),
+    Grouping(Box<Expr>),
+    Unary(Box<UnaryExpr>),
+    Binary(Box<BinaryExpr>),
+    Logical(Box<LogicalExpr>),
     Function(FunctionExpr),
+    Assignment(Box<AssignmentExpr>),
+    Conditional(Box<ConditionalExpr>),
 }
