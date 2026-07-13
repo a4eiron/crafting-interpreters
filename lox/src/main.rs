@@ -32,7 +32,6 @@ fn run_file(path: &str) -> std::result::Result<(), LoxError> {
     let stmts = parser.parse()?;
 
     let mut interpreter = Interpreter::new();
-
     let mut resolver = Resolver::new(&mut interpreter);
     resolver.resolve(&stmts)?;
 
