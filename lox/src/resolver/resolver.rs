@@ -173,8 +173,23 @@ impl<'a> Resolver<'a> {
             ExprKind::Set(expr) => self.resolve_set_expr(expr),
             ExprKind::This(keyword) => self.resolve_this(expression, keyword),
             ExprKind::Super(super_expr) => self.resolve_super_expr(expression, super_expr),
+            ExprKind::Function(func_expr) => self.resolve_func_expr(func_expr),
             _ => Ok(()),
         }
+    }
+
+    fn resolve_func_expr(&mut self, func_expr: &FunctionExpr) -> ResolveResult<()> {
+        let enclosing = std::mem::replace(&mut self.current_function, FunctionType::Function);
+
+        self.begin_scope();
+        for param in &func_expr.params {
+            self.declare(param.clone())?;
+            self.define(param.clone());
+        }
+        self.resolve(&func_expr.body)?;
+        self.end_scope();
+        self.current_function = enclosing;
+        Ok(())
     }
 
     fn resolve_super_expr(

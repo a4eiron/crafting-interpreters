@@ -251,7 +251,27 @@ impl Interpreter {
             ExprKind::Call(expr) => self.eval_call(expr),
             ExprKind::This(token) => self.eval_this(token, expression),
             ExprKind::Super(super_expr) => self.eval_super(expression, super_expr),
+            ExprKind::Function(expr) => self.eval_function(expr),
         }
+    }
+
+    fn eval_function(&mut self, expr: &FunctionExpr) -> RuntimeResult<Value> {
+        let synthetic_name = Token::new(
+            TokenType::Identifier,
+            0,
+            String::from("anonymous"),
+            Some(Literal::Nil),
+        );
+        let dummy_stmt = FuncStmt {
+            name: synthetic_name,
+            params: expr.params.clone(),
+            body: expr.body.clone(),
+            getter: false,
+        };
+
+        let closure = Rc::clone(&self.environment);
+        let function = LoxFunction::new(Rc::new(dummy_stmt), closure, false);
+        Ok(Value::Callable(Rc::new(function)))
     }
 
     fn eval_super(&mut self, expression: &Expr, super_expr: &SuperExpr) -> RuntimeResult<Value> {

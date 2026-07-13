@@ -228,16 +228,15 @@ impl<'a> Parser<'a> {
     fn func_declaration(&mut self) -> ParseResult<Stmt> {
         let name = self.consume(TokenType::Identifier)?.clone();
 
-        let mut args = Vec::new();
+        let mut params = Vec::new();
         let mut getter = false;
 
         if self.match_token(&[TokenType::LParen]) {
             if !self.check(TokenType::RParen) {
-                let mut t = true;
-                while t {
-                    args.push(self.consume(TokenType::Identifier)?.clone());
+                loop {
+                    params.push(self.consume(TokenType::Identifier)?.clone());
                     if !self.match_token(&[TokenType::Comma]) {
-                        t = false;
+                        break;
                     }
                 }
             }
@@ -251,7 +250,7 @@ impl<'a> Parser<'a> {
 
         Ok(Stmt::Func(FuncStmt {
             name,
-            params: args,
+            params,
             body,
             getter,
         }))
@@ -470,8 +469,7 @@ impl<'a> Parser<'a> {
         let mut args = vec![];
 
         if !self.check(TokenType::RParen) {
-            let mut t = true;
-            while t {
+            loop {
                 // i don't wanna have a limit, skipping..
                 // if args.len() >= 255 {
                 //     return Err(ParseError {
@@ -481,7 +479,7 @@ impl<'a> Parser<'a> {
                 // }
                 args.push(self.expression()?);
                 if !self.match_token(&[TokenType::Comma]) {
-                    t = false;
+                    break;
                 }
             }
         }
@@ -523,16 +521,36 @@ impl<'a> Parser<'a> {
             let token = self.previous().clone();
             return Ok(self.expr(ExprKind::Var(VarExpr { token })));
             //
+        } else if self.match_token(&[TokenType::Func]) {
+            return self.anon_function_expr();
         } else if self.match_token(&[TokenType::LParen]) {
             let expr = self.expression()?;
             self.consume(TokenType::RParen)?;
             return Ok(self.expr(ExprKind::Grouping(Box::new(expr))));
         }
-
         return Err(ParseError::UnexpectedToken {
             line: self.peek().line(),
             found: self.peek().token_type(),
         });
+    }
+
+    fn anon_function_expr(&mut self) -> ParseResult<Expr> {
+        self.consume(TokenType::LParen)?;
+        let mut params = Vec::new();
+
+        if !self.check(TokenType::RParen) {
+            loop {
+                params.push(self.consume(TokenType::Identifier)?.clone());
+                if !self.match_token(&[TokenType::Comma]) {
+                    break;
+                }
+            }
+        }
+        self.consume(TokenType::RParen)?;
+        self.consume(TokenType::LBrace)?;
+        let body = self.block()?;
+
+        Ok(self.expr(ExprKind::Function(FunctionExpr { params, body })))
     }
 
     fn consume(&mut self, token_type: TokenType) -> ParseResult<&Token> {

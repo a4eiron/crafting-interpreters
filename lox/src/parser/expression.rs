@@ -1,3 +1,4 @@
+use super::Stmt;
 use crate::lexer::{Literal, Token};
 
 #[derive(Debug, Clone)]
@@ -64,6 +65,13 @@ pub struct SuperExpr {
     pub method: Token,
 }
 
+//anon func
+#[derive(Debug, Clone)]
+pub struct FunctionExpr {
+    pub params: Vec<Token>,
+    pub body: Vec<Stmt>,
+}
+
 pub type ExprId = usize;
 
 #[derive(Debug, Clone)]
@@ -87,4 +95,5 @@ pub enum ExprKind {
     Set(Box<SetExpr>),
     This(Token),
     Super(SuperExpr),
+    Function(FunctionExpr),
 }

@@ -1,35 +1,26 @@
-class Vehicle {
-	init(owner){
-		this.owner = owner;
-	}
-
-	// getter
-	owner {
-		return this.owner;
-	}
-
-	beep(){
-		print "Beep Beep";
+func thrice(fn) {
+	for (var i = 1; i <= 3; i = i + 1) {
+		fn(i);
 	}
 }
 
-print Vehicle;
+thrice(func (a) {
+	print a;
+});
 
-class Car < Vehicle{
-	vroom(){
-		print "Vroom Vroom";
-	}
 
-	beep(){
-		super.beep();
-		print "beep boop";
-	}
+func returnFunc(){
+	return func(){
+		print "function returned";
+	};
 }
 
-print Car;
 
-var car = Car("a4");
-print "owner: " + car.owner;
-car.beep();
-car.vroom();
+var returned = returnFunc();
+print returned;
 
+returned();
+
+var fn = func() { return "fn"; };
+
+print fn();
