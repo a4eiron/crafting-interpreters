@@ -19,11 +19,11 @@ impl Environment {
         }))
     }
 
-    pub fn new_with_env(enclosing: Rc<RefCell<Environment>>) -> Self {
-        Self {
+    pub fn new_with_env(enclosing: Rc<RefCell<Environment>>) -> Rc<RefCell<Self>> {
+        Rc::new(RefCell::new(Self {
             values: HashMap::new(),
             enclosing: Some(enclosing),
-        }
+        }))
     }
 
     pub fn define(&mut self, name: &Token, value: Value) -> RuntimeResult<()> {
@@ -37,7 +37,11 @@ impl Environment {
             });
         }
 
-        self.values.insert(name.lexeme().to_string(), value);
+        self.define_str(name.lexeme(), value)
+    }
+
+    pub fn define_str(&mut self, name: &str, value: Value) -> RuntimeResult<()> {
+        self.values.insert(name.into(), value);
         Ok(())
     }
 
@@ -78,6 +82,10 @@ impl Environment {
             message: format!("Undefined variable '{}'", name.lexeme()),
         })
     }
+
+    pub fn get_str(&self, name: &str) -> Option<Value> {
+        self.values.get(name).cloned()
+    }
     pub fn get_at(
         env: Rc<RefCell<Environment>>,
         distance: usize,
@@ -85,6 +93,17 @@ impl Environment {
     ) -> RuntimeResult<Value> {
         let env = Self::ancestor(env, distance);
         env.borrow().get(name)
+    }
+
+    pub fn get_at_str(
+        env: Rc<RefCell<Environment>>,
+        distance: usize,
+        name: &str,
+    ) -> RuntimeResult<Value> {
+        let env = Self::ancestor(env, distance);
+        env.borrow()
+            .get_str(name)
+            .ok_or_else(|| RuntimeError::new("internal interpreter bug"))
     }
 
     pub fn ancestor(env: Rc<RefCell<Environment>>, distance: usize) -> Rc<RefCell<Environment>> {

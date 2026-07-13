@@ -155,7 +155,7 @@ impl Interpreter {
         Ok(())
     }
     fn exec_func(&mut self, stmt: &FuncStmt) -> std::result::Result<(), ControlFlow> {
-        let func = LoxFunction::new(stmt.clone(), Rc::clone(&self.environment), false);
+        let func = LoxFunction::new(Rc::new(stmt.clone()), Rc::clone(&self.environment), false);
         self.environment
             .borrow_mut()
             .define(&stmt.name, Value::Callable(Rc::new(func)))?;
@@ -189,25 +189,26 @@ impl Interpreter {
         let prev = self.environment.clone();
 
         if let Some(ref super_class) = super_class {
-            let mut env = Environment::new_with_env(prev.clone());
-            env.define(
-                &Token::new(TokenType::Super, 0, "super".into(), None),
-                Value::Class(super_class.clone()),
-            )?;
-
-            self.environment = Rc::new(RefCell::new(env));
+            let env = Environment::new_with_env(prev.clone());
+            env.borrow_mut()
+                .define_str("super", Value::Class(super_class.clone()))?;
+            self.environment = env;
         }
 
-        let mut methods: HashMap<String, Rc<LoxFunction>> = HashMap::new();
+        let mut methods: HashMap<String, LoxFunction> = HashMap::new();
         for method in &stmt.methods {
-            let func = LoxFunction::new(method.clone(), self.environment.clone(), true);
-            methods.insert(method.name.lexeme().into(), Rc::new(func));
+            let func = LoxFunction::new(Rc::new(method.clone()), self.environment.clone(), true);
+            methods.insert(method.name.lexeme().into(), func);
         }
 
-        let mut class_methods: HashMap<String, Rc<LoxFunction>> = HashMap::new();
+        let mut class_methods: HashMap<String, LoxFunction> = HashMap::new();
         for class_method in &stmt.class_methods {
-            let func = LoxFunction::new(class_method.clone(), self.environment.clone(), false);
-            class_methods.insert(class_method.name.lexeme().into(), Rc::new(func));
+            let func = LoxFunction::new(
+                Rc::new(class_method.clone()),
+                self.environment.clone(),
+                false,
+            );
+            class_methods.insert(class_method.name.lexeme().into(), func);
         }
 
         let class = LoxClass::new(
@@ -216,8 +217,6 @@ impl Interpreter {
             super_class.clone(),
             class_methods,
         );
-        // let class = LoxClass::new(&stmt.name.lexeme(), methods);
-
         if super_class.is_some() {
             self.environment = prev;
         }
@@ -264,8 +263,7 @@ impl Interpreter {
         let superclass =
             Environment::get_at(self.environment.clone(), distance, &super_expr.keyword)?;
 
-        let this_token = Token::new(TokenType::This, 0, "this".to_string(), None);
-        let instance = Environment::get_at(self.environment.clone(), distance - 1, &this_token)?;
+        let instance = Environment::get_at_str(self.environment.clone(), distance - 1, "this")?;
 
         let Value::Class(class) = superclass else {
             return Err(RuntimeError::new("Superclass must be a class"));
@@ -344,7 +342,7 @@ impl Interpreter {
             },
             Value::Class(class) => {
                 if let Some(class_method) = class.find_class_method(&expr.name.lexeme()) {
-                    return Ok(Value::Callable(class_method));
+                    return Ok(Value::Callable(Rc::new(class_method)));
                 }
                 Err(RuntimeError {
                     token: Some(expr.name.clone()),
@@ -456,9 +454,9 @@ impl Interpreter {
     pub fn execute_block(
         &mut self,
         stmts: &[Stmt],
-        env: Environment,
+        env: Rc<RefCell<Environment>>,
     ) -> std::result::Result<(), ControlFlow> {
-        let previous = std::mem::replace(&mut self.environment, Rc::new(RefCell::new(env)));
+        let previous = std::mem::replace(&mut self.environment, env);
         for stmt in stmts {
             if let Err(e) = self.execute(stmt) {
                 self.environment = previous;

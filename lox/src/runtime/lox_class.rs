@@ -8,22 +8,16 @@ use std::rc::Rc;
 pub struct LoxClass {
     name: String,
     super_class: Option<Rc<LoxClass>>,
-    methods: HashMap<String, Rc<LoxFunction>>,
-    class_methods: HashMap<String, Rc<LoxFunction>>,
-}
-
-impl fmt::Display for LoxClass {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "<class {}>", self.name)
-    }
+    methods: HashMap<String, LoxFunction>,
+    class_methods: HashMap<String, LoxFunction>,
 }
 
 impl LoxClass {
     pub fn new(
         name: &str,
+        methods: HashMap<String, LoxFunction>,
         super_class: Option<Rc<LoxClass>>,
-        methods: HashMap<String, Rc<LoxFunction>>,
-        class_methods: HashMap<String, Rc<LoxFunction>>,
+        class_methods: HashMap<String, LoxFunction>,
     ) -> Self {
         Self {
             name: name.into(),
@@ -33,7 +27,7 @@ impl LoxClass {
         }
     }
 
-    pub fn find_class_method(&self, name: &str) -> Option<Rc<LoxFunction>> {
+    pub fn find_class_method(&self, name: &str) -> Option<LoxFunction> {
         match self.class_methods.get(name) {
             Some(method) => Some(method.clone()),
             None => {
@@ -45,7 +39,7 @@ impl LoxClass {
         }
     }
 
-    pub fn find_method(&self, name: &str) -> Option<Rc<LoxFunction>> {
+    pub fn find_method(&self, name: &str) -> Option<LoxFunction> {
         match self.methods.get(name) {
             Some(method) => Some(method.clone()),
             None => {

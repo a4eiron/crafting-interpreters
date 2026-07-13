@@ -9,8 +9,8 @@ use crate::lexer::Token;
 
 pub enum PropResult {
     Value(Value),
-    Method(Rc<LoxFunction>),
-    Getter(Rc<LoxFunction>),
+    Method(LoxFunction),
+    Getter(LoxFunction),
 }
 
 #[derive(Debug, Clone)]
