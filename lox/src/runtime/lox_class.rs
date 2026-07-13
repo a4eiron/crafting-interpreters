@@ -12,11 +12,17 @@ pub struct LoxClass {
     class_methods: HashMap<String, Rc<LoxFunction>>,
 }
 
+impl fmt::Display for LoxClass {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "<class {}>", self.name)
+    }
+}
+
 impl LoxClass {
     pub fn new(
         name: &str,
-        methods: HashMap<String, Rc<LoxFunction>>,
         super_class: Option<Rc<LoxClass>>,
+        methods: HashMap<String, Rc<LoxFunction>>,
         class_methods: HashMap<String, Rc<LoxFunction>>,
     ) -> Self {
         Self {

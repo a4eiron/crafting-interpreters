@@ -4,16 +4,16 @@
 
 void initValueArr(ValueArray *arr) {
     arr->count = 0;
-    arr->capactiy = 0;
+    arr->capacity = 0;
     arr->values = NULL;
 }
 
 void writeValueArr(ValueArray *arr, Value v) {
-    if (arr->capactiy < arr->count + 1) {
-        int oldCapacity = arr->capactiy;
-        arr->capactiy = GROW_CAPACITY(oldCapacity);
+    if (arr->capacity < arr->count + 1) {
+        int oldCapacity = arr->capacity;
+        arr->capacity = GROW_CAPACITY(oldCapacity);
         arr->values =
-            GROW_ARRAY(Value, arr->values, oldCapacity, arr->capactiy);
+            GROW_ARRAY(Value, arr->values, oldCapacity, arr->capacity);
     }
 
     arr->values[arr->count] = v;
@@ -21,7 +21,7 @@ void writeValueArr(ValueArray *arr, Value v) {
 }
 
 void freeValueArr(ValueArray *arr) {
-    FREE_ARRAY(Value, arr->values, arr->capactiy);
+    FREE_ARRAY(Value, arr->values, arr->capacity);
     initValueArr(arr);
 }
 

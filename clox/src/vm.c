@@ -1,5 +1,6 @@
 #include "../include/vm.h"
 #include "../include/common.h"
+#include "../include/compiler.h"
 #include "../include/debug.h"
 
 #include <stdio.h>
@@ -21,7 +22,7 @@ static InterpretResult run() {
     } while (false)
 
     for (;;) {
-#ifndef DEBUG_TRACE_EXECUTION
+#ifdef DEBUG_TRACE_EXECUTION
         for (Value *slot = vm.stack; slot < vm.stackTop; slot++) {
             printf("[ ");
             printValue(*slot);
@@ -83,9 +84,19 @@ Value pop() {
     return value;
 }
 
-InterpretResult interpret(Chunk *chunk) {
-    vm.chunk = chunk;
-    vm.ip = chunk->code;
+InterpretResult interpret(const char *source) {
+    Chunk chunk;
+    initChunk(&chunk);
 
-    return run();
+    if (!compile(source, &chunk)) {
+        freeChunk(&chunk);
+        return INTERPRET_COMPILE_ERROR;
+    }
+
+    vm.chunk = &chunk;
+    vm.ip = vm.chunk->code;
+
+    InterpretResult result = run();
+    freeChunk(&chunk);
+    return result;
 }

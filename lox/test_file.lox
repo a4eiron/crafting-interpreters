@@ -25,5 +25,6 @@ print Car;
 
 var car = Car("a4");
 print "owner: " + car.owner;
+car.beep();
 car.vroom();
 
