@@ -128,9 +128,9 @@ impl<'a> Parser<'a> {
         let condition = condition.unwrap_or(self.expr(ExprKind::Literal(Literal::True)));
 
         stmt = Stmt::While(WhileStmt {
-            condition: condition,
+            condition,
+            increment,
             body: Box::new(stmt),
-            increment: increment,
         });
 
         if let Some(init) = initializer {
@@ -168,8 +168,8 @@ impl<'a> Parser<'a> {
 
         Ok(Stmt::If(IfStmt {
             condition,
+            else_branch,
             then_branch: Box::new(then_branch),
-            else_branch: else_branch,
         }))
     }
 
@@ -252,7 +252,7 @@ impl<'a> Parser<'a> {
         self.consume(TokenType::Semicolon)?;
         Ok(Stmt::Var(VarStmt {
             name: identifier,
-            initializer: initializer,
+            initializer,
         }))
     }
 
@@ -273,32 +273,32 @@ impl<'a> Parser<'a> {
     }
 
     fn or(&mut self) -> ParseResult<Expr> {
-        let mut expr = self.and()?;
+        let mut left = self.and()?;
         while self.match_token(&[TokenType::Or]) {
             let operator = self.previous().clone();
             let right = self.and()?;
-            expr = self.expr(ExprKind::Logical(Box::new(LogicalExpr {
-                left: expr,
-                right: right,
+            left = self.expr(ExprKind::Logical(Box::new(LogicalExpr {
+                left,
+                right,
                 operator,
             })));
         }
-        Ok(expr)
+        Ok(left)
     }
 
     fn and(&mut self) -> ParseResult<Expr> {
-        let mut expr = self.conditional()?;
+        let mut left = self.conditional()?;
 
         while self.match_token(&[TokenType::And]) {
             let operator = self.previous().clone();
             let right = self.conditional()?;
-            expr = self.expr(ExprKind::Logical(Box::new(LogicalExpr {
-                left: expr,
-                right: right,
+            left = self.expr(ExprKind::Logical(Box::new(LogicalExpr {
+                left,
+                right,
                 operator,
             })));
         }
-        Ok(expr)
+        Ok(left)
     }
 
     fn assignment(&mut self) -> ParseResult<Expr> {
@@ -314,13 +314,13 @@ impl<'a> Parser<'a> {
                     return Ok(self.expr(ExprKind::Set(Box::new(SetExpr {
                         object: get_expr.object,
                         name: get_expr.name,
-                        value: value,
+                        value,
                     }))));
                 }
                 ExprKind::Var(var_expr) => {
                     return Ok(self.expr(ExprKind::Assignment(Box::new(AssignmentExpr {
                         name: var_expr.token,
-                        value: value,
+                        value,
                     }))));
                 }
                 _ => {
@@ -344,31 +344,31 @@ impl<'a> Parser<'a> {
 
             expr = self.expr(ExprKind::Conditional(Box::new(ConditionalExpr {
                 condition: expr,
-                then_branch: then_branch,
-                else_branch: else_branch,
+                then_branch,
+                else_branch,
             })));
         }
         Ok(expr)
     }
 
     fn equality(&mut self) -> ParseResult<Expr> {
-        let mut expr = self.comparison()?;
+        let mut left = self.comparison()?;
 
         while self.match_token(&[TokenType::BangEqual, TokenType::EqualEqual]) {
             let operator = self.previous().clone();
             let right = self.comparison()?;
-            expr = self.expr(ExprKind::Binary(Box::new(BinaryExpr {
-                left: expr,
-                right: right,
-                operator: operator,
+            left = self.expr(ExprKind::Binary(Box::new(BinaryExpr {
+                left,
+                right,
+                operator,
             })));
         }
 
-        Ok(expr)
+        Ok(left)
     }
 
     fn comparison(&mut self) -> ParseResult<Expr> {
-        let mut expr = self.term()?;
+        let mut left = self.term()?;
 
         while self.match_token(&[
             TokenType::Greater,
@@ -379,57 +379,54 @@ impl<'a> Parser<'a> {
             let operator = self.previous().clone();
             let right = self.term()?;
 
-            expr = self.expr(ExprKind::Binary(Box::new(BinaryExpr {
-                left: expr,
-                right: right,
-                operator: operator,
+            left = self.expr(ExprKind::Binary(Box::new(BinaryExpr {
+                left,
+                right,
+                operator,
             })));
         }
 
-        Ok(expr)
+        Ok(left)
     }
 
     fn term(&mut self) -> ParseResult<Expr> {
-        let mut expr = self.factor()?;
+        let mut left = self.factor()?;
 
         while self.match_token(&[TokenType::Minus, TokenType::Plus]) {
             let operator = self.previous().clone();
             let right = self.factor()?;
 
-            expr = self.expr(ExprKind::Binary(Box::new(BinaryExpr {
-                left: expr,
-                right: right,
-                operator: operator,
+            left = self.expr(ExprKind::Binary(Box::new(BinaryExpr {
+                left,
+                right,
+                operator,
             })));
         }
 
-        Ok(expr)
+        Ok(left)
     }
 
     fn factor(&mut self) -> ParseResult<Expr> {
-        let mut expr = self.unary()?;
+        let mut left = self.unary()?;
 
         while self.match_token(&[TokenType::Slash, TokenType::Star]) {
             let operator = self.previous().clone();
             let right = self.unary()?;
-            expr = self.expr(ExprKind::Binary(Box::new(BinaryExpr {
-                left: expr,
-                right: right,
-                operator: operator,
+            left = self.expr(ExprKind::Binary(Box::new(BinaryExpr {
+                left,
+                right,
+                operator,
             })));
         }
 
-        Ok(expr)
+        Ok(left)
     }
 
     fn unary(&mut self) -> ParseResult<Expr> {
         if self.match_token(&[TokenType::Bang, TokenType::Minus]) {
             let operator = self.previous().clone();
             let right = self.unary()?;
-            return Ok(self.expr(ExprKind::Unary(Box::new(UnaryExpr {
-                operator,
-                right: right,
-            }))));
+            return Ok(self.expr(ExprKind::Unary(Box::new(UnaryExpr { operator, right }))));
         }
         self.call()
     }
@@ -474,7 +471,7 @@ impl<'a> Parser<'a> {
 
         Ok(self.expr(ExprKind::Call(Box::new(Call {
             callee: expr,
-            paren: paren,
+            paren,
             args,
         }))))
     }
@@ -508,19 +505,19 @@ impl<'a> Parser<'a> {
             return Ok(self.expr(ExprKind::Var(VarExpr { token })));
             //
         } else if self.match_token(&[TokenType::Fun]) {
-            return self.anon_function_expr();
+            return self.function_expr();
         } else if self.match_token(&[TokenType::LParen]) {
             let expr = self.expression()?;
             self.consume(TokenType::RParen)?;
             return Ok(self.expr(ExprKind::Grouping(Box::new(expr))));
         }
-        return Err(ParseError::UnexpectedToken {
+        Err(ParseError::UnexpectedToken {
             line: self.peek().line(),
             found: self.peek().token_type(),
-        });
+        })
     }
 
-    fn anon_function_expr(&mut self) -> ParseResult<Expr> {
+    fn function_expr(&mut self) -> ParseResult<Expr> {
         self.consume(TokenType::LParen)?;
         let params = self.func_params()?;
 
@@ -549,11 +546,11 @@ impl<'a> Parser<'a> {
             return Ok(self.advance());
         }
 
-        return Err(ParseError::ExpectedToken {
+        Err(ParseError::ExpectedToken {
             line: self.peek().line(),
             found: self.peek().token_type(),
             expected: token_type,
-        });
+        })
     }
 
     fn synchronize(&mut self) {
@@ -599,7 +596,7 @@ impl<'a> Parser<'a> {
         if !self.at_end() {
             self.current += 1;
         }
-        return self.previous();
+        self.previous()
     }
 
     fn previous(&self) -> &Token {

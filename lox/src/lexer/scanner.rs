@@ -11,7 +11,7 @@ pub struct Scanner<'a> {
 impl<'a> Scanner<'a> {
     pub fn new(source: &'a str) -> Self {
         Self {
-            source: source,
+            source,
             tokens: Vec::new(),
             start: 0,
             current: 0,

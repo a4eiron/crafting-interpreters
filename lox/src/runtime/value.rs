@@ -17,7 +17,7 @@ impl Value {
     pub fn add(self, rhs: &Value) -> RuntimeResult<Value> {
         match (self, rhs) {
             (Value::Number(a), Value::Number(b)) => Ok(Value::Number(a + b)),
-            (Value::String(a), Value::String(b)) => Ok(Value::String(a + &b)),
+            (Value::String(a), Value::String(b)) => Ok(Value::String(a + b)),
             (_, _) => Err(RuntimeError::new("operands must be numbers or strings")),
         }
     }
@@ -47,8 +47,8 @@ impl Value {
         match (self, rhs) {
             (Value::Number(a), Value::Number(b)) => Ok(Value::Bool(a == b)),
             (Value::String(a), Value::String(b)) => Ok(Value::Bool(a == b)),
-            (ref a, Value::Bool(b)) => Ok(Value::Bool(is_truthy(a) == *b)),
-            (Value::Bool(a), ref b) => Ok(Value::Bool(*a == is_truthy(b))),
+            (a, Value::Bool(b)) => Ok(Value::Bool(is_truthy(a) == *b)),
+            (Value::Bool(a), b) => Ok(Value::Bool(*a == is_truthy(b))),
             (Value::Nil, Value::Nil) => Ok(Value::Bool(true)),
             (_, _) => Err(RuntimeError::new("incompatable")),
         }
@@ -58,8 +58,8 @@ impl Value {
         match (self, rhs) {
             (Value::Number(a), Value::Number(b)) => Ok(Value::Bool(a != b)),
             (Value::String(a), Value::String(b)) => Ok(Value::Bool(a != b)),
-            (ref a, Value::Bool(b)) => Ok(Value::Bool(is_truthy(a) != *b)),
-            (Value::Bool(a), ref b) => Ok(Value::Bool(*a != is_truthy(b))),
+            (a, Value::Bool(b)) => Ok(Value::Bool(is_truthy(a) != *b)),
+            (Value::Bool(a), b) => Ok(Value::Bool(*a != is_truthy(b))),
             (_, _) => Err(RuntimeError::new("incompatable")),
         }
     }

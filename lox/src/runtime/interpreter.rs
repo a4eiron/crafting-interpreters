@@ -88,8 +88,8 @@ impl Interpreter {
             Stmt::Function(stmt) => self.exec_func(stmt)?,
             Stmt::Class(stmt) => self.exec_class(stmt)?,
             Stmt::Return(stmt) => self.exec_return(stmt)?,
-            Stmt::Break(token) => return Err(ControlFlow::Break),
-            Stmt::Continue(token) => return Err(ControlFlow::Continue),
+            Stmt::Break(_) => return Err(ControlFlow::Break),
+            Stmt::Continue(_) => return Err(ControlFlow::Continue),
         }
         Ok(())
     }
@@ -123,7 +123,7 @@ impl Interpreter {
         if is_truthy(&value) {
             self.execute(&stmt.then_branch)?;
         } else if let Some(stmt) = &stmt.else_branch {
-            self.execute(&stmt)?;
+            self.execute(stmt)?;
         }
         Ok(())
     }
@@ -149,7 +149,14 @@ impl Interpreter {
         Ok(())
     }
     fn exec_func(&mut self, stmt: &FuncStmt) -> std::result::Result<(), ControlFlow> {
-        let func = LoxFunction::new(Rc::new(stmt.clone()), Rc::clone(&self.environment), false);
+        let func = LoxFunction::new(
+            Some(stmt.name.lexeme().to_string()),
+            stmt.params.clone(),
+            stmt.body.clone(),
+            Rc::clone(&self.environment),
+            false,
+            stmt.getter,
+        );
         self.environment
             .borrow_mut()
             .define(&stmt.name, Value::Callable(Rc::new(func)))?;
@@ -207,7 +214,7 @@ impl Interpreter {
 
     fn exec_return(&mut self, stmt: &ReturnStmt) -> std::result::Result<(), ControlFlow> {
         let v = self.evaluate(&stmt.value)?;
-        return Err(ControlFlow::Return(v));
+        Err(ControlFlow::Return(v))
     }
 
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -231,21 +238,15 @@ impl Interpreter {
     }
 
     fn eval_function(&mut self, expr: &FunctionExpr) -> RuntimeResult<Value> {
-        let synthetic_name = Token::new(
-            TokenType::Identifier,
-            0,
-            String::from("anonymous"),
-            Some(Literal::Nil),
-        );
-        let dummy_stmt = FuncStmt {
-            name: synthetic_name,
-            params: expr.params.clone(),
-            body: expr.body.clone(),
-            getter: false,
-        };
-
         let closure = Rc::clone(&self.environment);
-        let function = LoxFunction::new(Rc::new(dummy_stmt), closure, false);
+        let function = LoxFunction::new(
+            None,
+            expr.params.clone(),
+            expr.body.clone(),
+            closure,
+            false,
+            false,
+        );
         Ok(Value::Callable(Rc::new(function)))
     }
 
@@ -328,7 +329,7 @@ impl Interpreter {
                 PropResult::Value(value) => Ok(value),
             },
             Value::Class(class) => {
-                if let Some(class_method) = class.find_class_method(&expr.name.lexeme()) {
+                if let Some(class_method) = class.find_class_method(expr.name.lexeme()) {
                     return Ok(Value::Callable(Rc::new(class_method)));
                 }
                 Err(RuntimeError {
@@ -512,9 +513,16 @@ fn build_methods(
 ) -> HashMap<String, LoxFunction> {
     funcs
         .iter()
-        .map(|f| {
-            let func = LoxFunction::new(Rc::new(f.clone()), env.clone(), is_initializer(f));
-            (f.name.lexeme().to_string(), func)
+        .map(|stmt| {
+            let func = LoxFunction::new(
+                Some(stmt.name.lexeme().to_string()),
+                stmt.params.clone(),
+                stmt.body.clone(),
+                env.clone(),
+                is_initializer(stmt),
+                stmt.getter,
+            );
+            (stmt.name.lexeme().to_string(), func)
         })
         .collect()
 }

@@ -1,33 +1,50 @@
 use super::{Callable, ControlFlow, Environment, LoxInstance, RuntimeResult, Value};
-use crate::parser::FuncStmt;
+use crate::lexer::Token;
+use crate::parser::Stmt;
 
 use std::fmt;
 use std::{cell::RefCell, rc::Rc};
 
 #[derive(Debug, Clone)]
 pub struct LoxFunction {
-    is_initializer: bool,
-    declaration: Rc<FuncStmt>,
+    name: Option<String>,
+    params: Vec<Token>,
+    body: Vec<Stmt>,
     closure: Rc<RefCell<Environment>>,
+    is_initializer: bool,
+    pub is_getter: bool,
 }
 
 impl fmt::Display for LoxFunction {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "<func {}>", self.declaration.name.lexeme())
+        match &self.name {
+            Some(n) => write!(f, "<func {}>", n),
+            None => write!(f, "<fn>"),
+        }
     }
 }
 
 impl LoxFunction {
     pub fn new(
-        declaration: Rc<FuncStmt>,
+        name: Option<String>,
+        params: Vec<Token>,
+        body: Vec<Stmt>,
         closure: Rc<RefCell<Environment>>,
         is_initializer: bool,
+        is_getter: bool,
     ) -> Self {
         Self {
-            is_initializer,
-            declaration,
+            name,
+            params,
+            body,
             closure,
+            is_initializer,
+            is_getter,
         }
+    }
+
+    pub fn is_getter(&self) -> bool {
+        self.is_getter
     }
 
     pub fn bind(&self, instance: LoxInstance) -> RuntimeResult<Self> {
@@ -36,27 +53,26 @@ impl LoxFunction {
             .define_str("this", Value::Instance(instance))?;
 
         Ok(Self {
+            name: self.name.clone(),
+            params: self.params.clone(),
+            body: self.body.clone(),
             is_initializer: self.is_initializer,
-            declaration: self.declaration.clone(),
+            is_getter: self.is_getter,
             closure: env,
         })
-    }
-
-    pub fn is_getter(&self) -> bool {
-        self.declaration.getter
     }
 }
 
 impl Callable for LoxFunction {
     fn arity(&self) -> usize {
-        self.declaration.params.len()
+        self.params.len()
     }
     fn call(&self, interpreter: &mut super::Interpreter, args: Vec<Value>) -> RuntimeResult<Value> {
         let env = Environment::new_with_env(Rc::clone(&self.closure));
-        for (token, value) in self.declaration.params.iter().zip(args.into_iter()) {
+        for (token, value) in self.params.iter().zip(args) {
             env.borrow_mut().define(token, value)?;
         }
-        let value = match interpreter.execute_block(&self.declaration.body, env) {
+        let value = match interpreter.execute_block(&self.body, env) {
             Err(e) => match e {
                 ControlFlow::Continue => Value::Nil,
                 ControlFlow::Break => Value::Nil,

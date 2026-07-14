@@ -50,7 +50,7 @@ impl<'a> Resolver<'a> {
     fn resolve_stmt(&mut self, statement: &Stmt) -> ResolveResult<()> {
         match statement {
             Stmt::Block(stmts) => self.resolve_block_stmt(stmts),
-            Stmt::Class(stmt) => self.resolve_class_stmt(&stmt),
+            Stmt::Class(stmt) => self.resolve_class_stmt(stmt),
             Stmt::Expression(expr) => self.resolve_expr(expr),
             Stmt::Function(stmt) => self.resolve_func_stmt(stmt),
             Stmt::If(stmt) => self.resolve_if_stmt(stmt),
@@ -59,10 +59,10 @@ impl<'a> Resolver<'a> {
             Stmt::Var(stmt) => self.resolve_var_stmt(stmt),
             Stmt::While(stmt) => self.resolve_while_stmt(stmt),
             Stmt::Break(token) if self.loop_depth == 0 => {
-                return Err(ResolveError::BreakOutsideLoop(token.clone()));
+                Err(ResolveError::BreakOutsideLoop(token.clone()))
             }
             Stmt::Continue(token) if self.loop_depth == 0 => {
-                return Err(ResolveError::ContinueOutsideLoop(token.clone()));
+                Err(ResolveError::ContinueOutsideLoop(token.clone()))
             }
             Stmt::Break(_) | Stmt::Continue(_) => Ok(()),
         }
@@ -74,7 +74,7 @@ impl<'a> Resolver<'a> {
             ExprKind::Binary(expr) => self.resolve_binary_expr(expr),
             ExprKind::Call(expr) => self.resolve_call_expr(expr),
             ExprKind::Function(func_expr) => self.resolve_func_expr(func_expr),
-            ExprKind::Grouping(expr) => self.resolve_expr(&expr),
+            ExprKind::Grouping(expr) => self.resolve_expr(expr),
             ExprKind::Get(expr) => self.resolve_expr(&expr.object),
             ExprKind::Logical(expr) => self.resolve_logical_expr(expr),
             ExprKind::Set(expr) => self.resolve_set_expr(expr),
@@ -161,7 +161,7 @@ impl<'a> Resolver<'a> {
         self.resolve_expr(&stmt.condition)?;
         self.resolve_stmt(&stmt.then_branch)?;
         if let Some(else_branch) = &stmt.else_branch {
-            self.resolve_stmt(&else_branch)?;
+            self.resolve_stmt(else_branch)?;
         }
         Ok(())
     }
@@ -215,10 +215,10 @@ impl<'a> Resolver<'a> {
     }
 
     fn resolve_var_expr(&mut self, expression: &Expr, token: &Token) -> ResolveResult<()> {
-        if let Some(scope) = self.scopes.last() {
-            if scope.get(token.lexeme()).map_or(false, |defined| !defined) {
-                return Err(ResolveError::ReadLocalInOwnInitializer(token.clone()));
-            }
+        if let Some(scope) = self.scopes.last()
+            && scope.get(token.lexeme()).is_some_and(|defined| !defined)
+        {
+            return Err(ResolveError::ReadLocalInOwnInitializer(token.clone()));
         }
         self.resolve_local(expression, token);
         Ok(())
