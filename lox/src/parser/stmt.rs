@@ -45,8 +45,8 @@ pub struct ClassStmt {
 
 #[derive(Debug, Clone)]
 pub enum Stmt {
-    Break,
-    Continue,
+    Break(Token),
+    Continue(Token),
     Print(Expr),
     If(IfStmt),
     Expression(Expr),

@@ -13,6 +13,8 @@ pub enum ResolveError {
     SuperWithoutSuperClass(Token),
     ThisOutsideClass(Token),
     VariableAlreadyInScope(Token),
+    BreakOutsideLoop(Token),
+    ContinueOutsideLoop(Token),
 }
 
 impl std::error::Error for ResolveError {}
@@ -32,6 +34,8 @@ impl fmt::Display for ResolveError {
             Self::VariableAlreadyInScope(token) => {
                 format!("variable {} already in scope", token.lexeme())
             }
+            Self::ContinueOutsideLoop(..) => "cannot use continue outside a loop".into(),
+            Self::BreakOutsideLoop(..) => "cannot use break outside a loop".into(),
         };
 
         write!(f, "line: {} | {}", self.token().line(), msg)
@@ -48,6 +52,8 @@ impl ResolveError {
             | Self::SuperOutsideClass(token)
             | Self::SuperWithoutSuperClass(token)
             | Self::ThisOutsideClass(token)
+            | Self::ContinueOutsideLoop(token)
+            | Self::BreakOutsideLoop(token)
             | Self::VariableAlreadyInScope(token) => token,
         }
     }

@@ -88,8 +88,8 @@ impl Interpreter {
             Stmt::Function(stmt) => self.exec_func(stmt)?,
             Stmt::Class(stmt) => self.exec_class(stmt)?,
             Stmt::Return(stmt) => self.exec_return(stmt)?,
-            Stmt::Break => return Err(ControlFlow::Break),
-            Stmt::Continue => return Err(ControlFlow::Continue),
+            Stmt::Break(token) => return Err(ControlFlow::Break),
+            Stmt::Continue(token) => return Err(ControlFlow::Continue),
         }
         Ok(())
     }
@@ -132,8 +132,10 @@ impl Interpreter {
         let mut value = self.evaluate(&stmt.condition)?;
         while is_truthy(&value) {
             match self.execute(&stmt.body) {
-                Ok(_) | Err(ControlFlow::Continue) => {}
-                Err(ControlFlow::Break) => break,
+                Ok(_) | Err(ControlFlow::Continue) => (),
+                Err(ControlFlow::Break) => {
+                    break;
+                }
                 Err(e) => return Err(e),
             }
 

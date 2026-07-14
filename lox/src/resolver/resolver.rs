@@ -26,6 +26,7 @@ pub struct Resolver<'a> {
     scopes: Vec<HashMap<String, bool>>,
     current_function: FunctionType,
     current_class: ClassType,
+    loop_depth: usize,
 }
 
 impl<'a> Resolver<'a> {
@@ -35,6 +36,7 @@ impl<'a> Resolver<'a> {
             scopes: Vec::new(),
             current_function: FunctionType::None,
             current_class: ClassType::None,
+            loop_depth: 0,
         }
     }
 
@@ -56,7 +58,13 @@ impl<'a> Resolver<'a> {
             Stmt::Return(stmt) => self.resolve_return_smt(stmt),
             Stmt::Var(stmt) => self.resolve_var_stmt(stmt),
             Stmt::While(stmt) => self.resolve_while_stmt(stmt),
-            _ => Ok(()),
+            Stmt::Break(token) if self.loop_depth == 0 => {
+                return Err(ResolveError::BreakOutsideLoop(token.clone()));
+            }
+            Stmt::Continue(token) if self.loop_depth == 0 => {
+                return Err(ResolveError::ContinueOutsideLoop(token.clone()));
+            }
+            Stmt::Break(_) | Stmt::Continue(_) => Ok(()),
         }
     }
 
@@ -174,7 +182,9 @@ impl<'a> Resolver<'a> {
 
     fn resolve_while_stmt(&mut self, stmt: &WhileStmt) -> ResolveResult<()> {
         self.resolve_expr(&stmt.condition)?;
+        self.loop_depth += 1;
         self.resolve_stmt(&stmt.body)?;
+        self.loop_depth -= 1;
         if let Some(incr) = &stmt.increment {
             self.resolve_expr(incr)?;
         }
@@ -278,6 +288,9 @@ impl<'a> Resolver<'a> {
         func_type: FunctionType,
     ) -> ResolveResult<()> {
         let enclosing_function = std::mem::replace(&mut self.current_function, func_type);
+        let enclosing_loop_depth = self.loop_depth;
+        self.loop_depth = 0;
+
         self.begin_scope();
         for param in params {
             self.declare(param.clone())?;
@@ -286,6 +299,7 @@ impl<'a> Resolver<'a> {
 
         self.resolve(body)?;
         self.end_scope();
+        self.loop_depth = enclosing_loop_depth;
         self.current_function = enclosing_function;
         Ok(())
     }

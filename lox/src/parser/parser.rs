@@ -76,13 +76,15 @@ impl<'a> Parser<'a> {
     }
 
     fn break_stmt(&mut self) -> ParseResult<Stmt> {
+        let token = self.previous().clone();
         self.consume(TokenType::Semicolon)?;
-        Ok(Stmt::Break)
+        Ok(Stmt::Break(token))
     }
 
     fn continue_stmt(&mut self) -> ParseResult<Stmt> {
+        let token = self.previous().clone();
         self.consume(TokenType::Semicolon)?;
-        Ok(Stmt::Continue)
+        Ok(Stmt::Continue(token))
     }
 
     fn return_stmt(&mut self) -> ParseResult<Stmt> {
